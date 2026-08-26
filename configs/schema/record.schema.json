@@ -1,0 +1,297 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/shohel1arman/BanglaRAG-Eval/configs/schema/record.schema.json",
+  "title": "BanglaRAG-Eval benchmark record",
+  "description": "Canonical schema for one benchmark example. A record is created at question-construction time and progressively enriched by later pipeline stages (retrieval, generation, human annotation, adjudication, automatic evaluation). Fields that a later stage fills are nullable/empty until that stage runs. Human annotation fields are NEVER populated automatically; automatic evaluator results live exclusively in evaluator_outputs.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "example_id",
+    "document_id",
+    "source_id",
+    "question",
+    "question_language",
+    "language_condition",
+    "data_origin",
+    "source_text",
+    "evidence_condition",
+    "dataset_version",
+    "timestamp"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Version of this schema the record conforms to."
+    },
+    "example_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "description": "Globally unique identifier for this example."
+    },
+    "document_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Identifier of the source document the question was constructed from."
+    },
+    "source_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Identifier of the source collection/corpus (e.g. a fixture set, Bangla Wikipedia slice, curated document set)."
+    },
+    "question": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The question posed to the RAG system."
+    },
+    "question_language": {
+      "type": "string",
+      "enum": ["bn", "en", "bn_en_mixed", "banglish"],
+      "description": "Surface language/script of the question text itself. 'banglish' = Bangla expressed in Latin/Roman characters."
+    },
+    "language_condition": {
+      "type": "string",
+      "enum": ["native_bangla", "translated_bangla", "code_mixed", "banglish", "english"],
+      "description": "Experimental language condition of the example as a whole. Banglish (romanized Bangla) is a DISTINCT condition and must not be collapsed into code_mixed. 'english' is a control baseline only."
+    },
+    "data_origin": {
+      "type": "string",
+      "enum": [
+        "native_authored",
+        "human_translated",
+        "machine_translated",
+        "model_generated",
+        "synthetic_constructed",
+        "adapted_existing_benchmark"
+      ],
+      "description": "True provenance of the example content, independent of the experimental condition it represents."
+    },
+    "source_text": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The original source passage the question and intended answer are grounded in. Preserved verbatim for provenance even when retrieval is corrupted."
+    },
+    "source_span": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["start_char", "end_char"],
+      "properties": {
+        "start_char": {"type": "integer", "minimum": 0},
+        "end_char": {"type": "integer", "minimum": 0},
+        "text": {"type": ["string", "null"]}
+      },
+      "description": "Character span (NFC-normalized offsets) in source_text that grounds the intended answer. Null if not span-localized."
+    },
+    "intended_answer": {
+      "type": ["string", "null"],
+      "description": "The answer the question was designed to elicit, traceable to source_span. Used for question-generation provenance, never as a faithfulness gold label."
+    },
+    "retrieved_context": {
+      "type": ["string", "null"],
+      "description": "Exact concatenated context string shown to the generator. Null until the retrieval stage has run."
+    },
+    "retrieval_documents": {
+      "type": "array",
+      "description": "The individual retrieved passages, in rank order. Empty until retrieval has run.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["document_id", "text", "rank"],
+        "properties": {
+          "document_id": {"type": "string", "minLength": 1},
+          "text": {"type": "string"},
+          "rank": {"type": "integer", "minimum": 1},
+          "score": {"type": ["number", "null"]},
+          "source": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "retrieval_configuration": {
+      "type": ["object", "null"],
+      "description": "Full retrieval configuration dump (top_k, index version, analyzer, etc.) for reproducibility. Free-form object; the common fields also appear flat below."
+    },
+    "evidence_condition": {
+      "type": "string",
+      "enum": ["correct", "partially_relevant", "irrelevant", "contradictory", "missing"],
+      "description": "Controlled evidence condition this example represents, stored explicitly at construction time (never inferred later)."
+    },
+    "evidence_condition_notes": {
+      "type": ["string", "null"],
+      "description": "How the evidence condition was constructed or verified for this example."
+    },
+    "generated_answer": {
+      "type": ["string", "null"],
+      "description": "Exact answer produced by the generator. Null until the generation stage has run."
+    },
+    "answer_claims": {
+      "type": ["array", "null"],
+      "items": {"type": "string", "minLength": 1},
+      "description": "Optional decomposition of the generated answer into atomic claims."
+    },
+    "faithfulness_category": {
+      "type": ["string", "null"],
+      "enum": [
+        "faithful",
+        "partially_faithful",
+        "unsupported",
+        "contradictory",
+        "insufficient_evidence",
+        null
+      ],
+      "description": "GOLD faithfulness category. Derived exclusively from human annotation: must equal adjudication.label when an adjudication exists, or the unanimous label of >= 2 independent annotators otherwise (rule R3). Never populated by any automatic evaluator, including SemFuse, RAGAS, or LLM judges."
+    },
+    "hallucination_type": {
+      "type": ["string", "null"],
+      "enum": [
+        "none",
+        "evident_conflict",
+        "subtle_conflict",
+        "evident_baseless_information",
+        "subtle_baseless_information",
+        "other",
+        null
+      ],
+      "description": "Optional finer-grained hallucination type assigned during human annotation/adjudication (RAGTruth-inspired, provisional). Human-assigned only: requires human annotation provenance on the record (rule R9)."
+    },
+    "annotations": {
+      "type": "array",
+      "description": "Independent human annotations (at least two independent annotators before adjudication). Entered by humans only.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["annotator_id", "label", "explanation", "timestamp"],
+        "properties": {
+          "annotator_id": {"type": "string", "minLength": 1},
+          "label": {
+            "type": "string",
+            "enum": ["faithful", "partially_faithful", "unsupported", "contradictory", "insufficient_evidence"]
+          },
+          "explanation": {"type": "string", "minLength": 1},
+          "timestamp": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "adjudication": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["label", "explanation", "adjudicator_id", "method", "timestamp"],
+      "properties": {
+        "label": {
+          "type": "string",
+          "enum": ["faithful", "partially_faithful", "unsupported", "contradictory", "insufficient_evidence"]
+        },
+        "explanation": {"type": "string", "minLength": 1},
+        "adjudicator_id": {"type": "string", "minLength": 1},
+        "method": {
+          "type": "string",
+          "enum": ["third_rater", "joint_session"],
+          "description": "How the disagreement was resolved: an independent third rater (adjudicator_id must differ from the annotators, rule R8) or a joint session of the annotators (adjudicator_id identifies who recorded the consensus)."
+        },
+        "timestamp": {"type": "string", "minLength": 1}
+      },
+      "description": "Human resolution of annotator disagreement. Required when independent annotations disagree; when annotators agree unanimously, the unanimous label itself becomes gold and no adjudication record is created (rule R3). Only valid after >= 2 independent annotations exist."
+    },
+    "generator_model": {
+      "type": ["string", "null"],
+      "description": "Model that produced generated_answer."
+    },
+    "generator_version": {
+      "type": ["string", "null"],
+      "description": "Exact version/identifier of the generator model."
+    },
+    "generation_settings": {
+      "type": ["object", "null"],
+      "description": "Decoding settings (temperature, max_tokens, etc.) used for generation."
+    },
+    "embedding_model": {
+      "type": ["string", "null"],
+      "description": "Embedding model used by dense retrieval, if any."
+    },
+    "retriever": {
+      "type": ["string", "null"],
+      "description": "Retriever identifier (e.g. bm25-lucene-bn, bge-m3)."
+    },
+    "reranker": {
+      "type": ["string", "null"],
+      "description": "Reranker identifier, if any."
+    },
+    "prompt_version": {
+      "type": ["string", "null"],
+      "description": "Version identifier of the prompt template used for generation."
+    },
+    "question_generation": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "method": {"type": ["string", "null"]},
+        "model": {"type": ["string", "null"]},
+        "model_version": {"type": ["string", "null"]},
+        "prompt_version": {"type": ["string", "null"]},
+        "timestamp": {"type": ["string", "null"]}
+      },
+      "description": "Provenance of the question itself (human-written vs model-generated, and with what)."
+    },
+    "corruption_metadata": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["corruption_type", "original_context_ids", "modified_context_ids", "operation_description", "random_seed"],
+      "properties": {
+        "corruption_type": {"type": "string", "minLength": 1},
+        "original_context_ids": {"type": "array", "items": {"type": "string"}},
+        "modified_context_ids": {"type": "array", "items": {"type": "string"}},
+        "operation_description": {"type": "string", "minLength": 1},
+        "random_seed": {"type": ["integer", "null"]}
+      },
+      "description": "Present iff the retrieved evidence was deliberately corrupted. Original evidence is preserved in source_text / original_context_ids; corruption is never silent."
+    },
+    "evaluator_outputs": {
+      "type": "array",
+      "description": "Outputs of automatic evaluators. These are the SYSTEMS UNDER EVALUATION, never gold labels.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["evaluator_name", "evaluator_version"],
+        "properties": {
+          "evaluator_name": {"type": "string", "minLength": 1},
+          "evaluator_version": {"type": "string", "minLength": 1},
+          "score": {"type": ["number", "null"]},
+          "label": {"type": ["string", "null"]},
+          "explanation": {"type": ["string", "null"]},
+          "latency_seconds": {"type": ["number", "null"], "minimum": 0},
+          "cost_usd": {"type": ["number", "null"], "minimum": 0},
+          "configuration": {"type": ["object", "null"]},
+          "timestamp": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "dataset_version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Version of the dataset this record belongs to."
+    },
+    "timestamp": {
+      "type": "string",
+      "minLength": 1,
+      "description": "ISO-8601 creation timestamp of the record."
+    },
+    "random_seed": {
+      "type": ["integer", "null"],
+      "description": "Seed used for any stochastic step in constructing this record."
+    },
+    "cost": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "description": "Generation cost in USD for this record, if measured. Do not report unmeasured values."
+    },
+    "latency": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "description": "Generation latency in seconds for this record, if measured. Do not report unmeasured values."
+    },
+    "notes": {
+      "type": ["string", "null"],
+      "description": "Free-form notes."
+    }
+  }
+}

@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "banglarag-eval"
+version = "0.1.0"
+description = "Benchmark infrastructure for evaluating RAG faithfulness evaluators in Bangla, code-mixed, Banglish, and translated settings"
+requires-python = ">=3.10"
+dependencies = [
+    "PyYAML",
+    "jsonschema>=4.18",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+# Metrics/analysis stack, needed from Milestone 2 onward.
+analysis = ["numpy", "pandas", "scikit-learn", "scipy", "tqdm"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# The package reads configs/schema/record.schema.json and
+# configs/conditions.yaml at runtime via constants.REPO_ROOT, which
+# resolves only inside a repository checkout (editable install or the
+# tests/conftest.py path setup). Milestone 1 therefore supports editable
+# installs only; a non-editable install raises a clear FileNotFoundError
+# from schema.py rather than failing obscurely. Packaging those configs
+# as package data is deferred to Milestone 2.
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+
+# Testing and type checking
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE / editor
+.vscode/
+.idea/
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Secrets and credentials
+.env
+.env.*
+*.pem
+*.key
+
+# Python build artifacts
+build/
+dist/
+*.egg-info/
+
+# Raw and private data
+data/raw/
+data/private/
+data/intermediate/
+
+# Generated experiment outputs
+outputs/
+results/
+artifacts/
+checkpoints/
+models/
+logs/
+
+# Experiment tracking
+wandb/
+mlruns/
+
+# Temporary files
+*.swp
+*.swo
+*.tmp

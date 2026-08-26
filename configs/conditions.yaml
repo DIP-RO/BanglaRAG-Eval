@@ -1,0 +1,89 @@
+# Canonical experimental conditions for BanglaRAG-Eval.
+# This file is the single machine-readable source of truth for condition
+# names. Code must read condition vocabularies from here (or from the
+# mirrored constants in src/banglarag_eval/constants.py, which are tested
+# against this file) rather than hard-coding strings.
+#
+# Do not rename or remove a condition without a documented protocol change.
+
+language_conditions:
+  native_bangla:
+    description: >
+      Originally authored in Bangla (Bengali script). Example:
+      "বাংলাদেশের রাজধানী ঢাকা।"
+  translated_bangla:
+    description: >
+      Originally available in another language and translated into Bangla.
+      Must never be conflated with native Bangla; data_origin must record
+      the translation provenance.
+  code_mixed:
+    description: >
+      Bangla and English mixed within a single linguistic representation
+      (Bengali script with embedded English words). Example:
+      "বাংলাদেশের economy গত কয়েক বছরে significantly grow করেছে।"
+  banglish:
+    description: >
+      Bangla expressed primarily in Latin/Roman characters (romanized
+      Bangla). Example: "Bangladesh er economy goto koyek bochor-e
+      significantly grow koreche." Treated as a DISTINCT exploratory
+      script condition; never collapsed into code_mixed.
+  english:
+    description: >
+      English control baseline for calibrated comparison. Not the focus of
+      the benchmark; Bangla remains the primary testbed.
+
+evidence_conditions:
+  correct:
+    description: Retrieved evidence fully supports the answer.
+  partially_relevant:
+    description: Evidence supports only part of the claims in the answer.
+  irrelevant:
+    description: Retrieved evidence is unrelated or insufficiently relevant.
+  contradictory:
+    description: Retrieved evidence conflicts with the answer.
+  missing:
+    description: >
+      The retrieved context does not contain sufficient supporting
+      evidence for the answer.
+
+# Human faithfulness taxonomy. Gold labels come exclusively from human
+# annotation and adjudication (see docs/annotation_guidelines.md).
+faithfulness_categories:
+  faithful:
+    description: Every claim in the answer is supported by the retrieved evidence.
+  partially_faithful:
+    description: Some claims are supported; at least one substantive claim is not.
+  unsupported:
+    description: >
+      The central claims are not supported by the retrieved evidence
+      (regardless of whether they happen to be true in the world).
+  contradictory:
+    description: At least one central claim conflicts with the retrieved evidence.
+  insufficient_evidence:
+    description: >
+      The retrieved evidence is inadequate to verify or refute the
+      answer's central claims.
+
+# Provisional finer-grained hallucination types (RAGTruth-inspired).
+# Refined during annotation-guideline piloting; optional per record.
+hallucination_types:
+  - none
+  - evident_conflict
+  - subtle_conflict
+  - evident_baseless_information
+  - subtle_baseless_information
+  - other
+
+question_languages:
+  - bn
+  - en
+  - bn_en_mixed
+  - banglish
+
+data_origins:
+  - native_authored
+  - human_translated
+  - machine_translated
+  - model_generated
+  - synthetic_constructed
+  - adapted_existing_benchmark

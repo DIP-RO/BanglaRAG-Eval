@@ -1,0 +1,37 @@
+# Core research environment
+#
+# The exact dependency versions will be frozen after the pilot
+# experimental setup is finalized.
+#
+# Do not add packages here simply because they may be useful.
+# Every dependency should have a documented role in the benchmark.
+
+# Numerical foundation for metrics and analysis (evaluation stage).
+numpy
+
+# Tabular analysis of annotation batches and evaluator outputs (analysis stage).
+pandas
+
+# Metrics: Cohen's kappa, precision/recall/F1, balanced accuracy, AUROC
+# (evaluation stage; not yet imported in Milestone 1).
+scikit-learn
+
+# Statistical testing: bootstrap / McNemar support (analysis stage).
+scipy
+
+# Loading pilot and condition configuration files (configs/*.yaml).
+pyyaml
+
+# Progress reporting for long-running generation/evaluation loops.
+tqdm
+
+# Validating benchmark records against the canonical machine-readable
+# schema (configs/schema/record.schema.json). >=4.18 for reliable
+# JSON Schema draft 2020-12 support.
+jsonschema>=4.18
+
+# Test runner for the validation, sampling, and fixture test suite.
+pytest
+
+# NLP / RAG dependencies will be added after the evaluator
+# and benchmark pipeline are finalized.

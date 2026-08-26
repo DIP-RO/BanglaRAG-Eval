@@ -1,0 +1,25 @@
+# Stage 2 pilot configuration — pilot expansion (300-500 examples).
+#
+# DO NOT RUN STAGE 2 until Stage 1 has passed the methodological gates
+# defined in docs/pilot_design.md (annotation agreement, taxonomy
+# stability, pipeline integrity). This file exists so that scaling from
+# 40 -> 400 is a configuration change, not a code or schema change.
+
+stage: pilot_expansion
+pilot_size: 400
+random_seed: 20260827
+dataset_version: pilot-stage2-0.1.0
+
+language_proportions:
+  native_bangla: 0.30
+  translated_bangla: 0.20
+  code_mixed: 0.20
+  banglish: 0.15
+  english: 0.15
+
+evidence_proportions:
+  correct: 0.30
+  partially_relevant: 0.20
+  irrelevant: 0.15
+  contradictory: 0.20
+  missing: 0.15

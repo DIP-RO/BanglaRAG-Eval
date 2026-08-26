@@ -1,0 +1,33 @@
+# Stage 1 pilot configuration — methodology validation.
+#
+# Stage 1 exists to test the COMPLETE pipeline (construction -> retrieval
+# -> generation -> annotation -> adjudication -> evaluation) on a small,
+# diverse sample before any scaling. Target size is 30-50 examples; the
+# value below is configurable, not hard-coded anywhere in code.
+#
+# Proportions are sampling TARGETS, not guarantees of a perfectly
+# balanced matrix. The deterministic allocation procedure (largest
+# remainder over the joint language x evidence distribution) is
+# documented in docs/pilot_design.md and implemented in
+# src/banglarag_eval/sampling.py.
+
+stage: methodology_validation
+pilot_size: 40
+random_seed: 20260826
+dataset_version: pilot-stage1-0.1.0
+
+# Bangla is the primary testbed: native Bangla carries the largest share.
+# English is a control baseline only.
+language_proportions:
+  native_bangla: 0.30
+  translated_bangla: 0.20
+  code_mixed: 0.20
+  banglish: 0.15
+  english: 0.15
+
+evidence_proportions:
+  correct: 0.30
+  partially_relevant: 0.20
+  irrelevant: 0.15
+  contradictory: 0.20
+  missing: 0.15
