@@ -8,6 +8,17 @@
 
 ICLR 2027 — preliminary target.
 
+Key dates (per the official ICLR 2027 schedule):
+- **Abstract deadline:** September 18, 2026 (AoE)
+- **Full-paper deadline:** September 25, 2026 (AoE)
+
+These dates drive the project timeline: the pilot must be completed,
+analyzed, and the benchmark design finalized with enough lead time for
+the full experimental campaign and paper writing before the full-paper
+deadline. The two-stage pilot structure (Section 9) is designed to
+validate methodology early enough to scale and run complete experiments
+within this window.
+
 The exact title and contribution will be finalized after the pilot experiments.
 
 ## 1. Core Research Problem
@@ -18,14 +29,41 @@ The project studies the reliability of the evaluation methods themselves, rather
 
 ### Motivation and Methodological Gap (working statement)
 
-Existing RAG-faithfulness meta-evaluation resources are English-centric or
-exclude Bengali (e.g., MEMERAG covers EN/DE/ES/FR/HI only), while existing
-Bangla resources cover hallucination without retrieval, or retrieval without
-faithfulness. Cross-lingual evidence suggests judge and detector reliability
-can degrade sharply outside high-resource languages. Whether this holds for
-Bangla — and for code-mixed and romanized Bangla — is an open **empirical**
-question. This gap statement remains *working* until the literature review
-and pilot evidence support it; it must not be presented as established.
+The literature reviewed for this project — including RAGTruth, RAGAS, ARES,
+MEMERAG, Turk-LettuceDetect, and recent Bengali hallucination work — reveals
+a structural gap: existing RAG-faithfulness meta-evaluation resources are
+English-centric or exclude Bengali (e.g., MEMERAG covers EN/DE/ES/FR/HI only),
+while existing Bangla resources cover hallucination without retrieval (e.g.,
+the Bengali hallucination detection work), or retrieval without faithfulness
+meta-evaluation. Turk-LettuceDetect addresses hallucination detection but not
+RAG faithfulness evaluation in the code-mixed/low-resource setting we target.
+Cross-lingual evidence suggests judge and detector reliability can degrade
+sharply outside high-resource languages. Whether this holds for Bangla — and
+for code-mixed and romanized Bangla — is an open **empirical** question.
+
+### Novelty Claim (working — contingent on pilot evidence)
+
+If the gap is confirmed by the pilot, the contribution would be:
+
+1. **The first meta-evaluation benchmark for RAG faithfulness evaluators in
+   Bangla**, covering native, translated, code-mixed, and romanized (Banglish)
+   script conditions — none of which are covered by existing meta-evaluation
+   resources (RAGTruth, MEMERAG).
+2. **A controlled evidence-condition design** (correct / partially relevant /
+   irrelevant / contradictory / missing) that isolates evaluator failure modes
+   across language conditions, rather than only measuring aggregate agreement.
+3. **An empirical comparison of evaluator families** (LLM judges, RAGAS, ARES,
+   encoder detectors, lexical baselines) against independent human annotation,
+   with ranking-stability and cost/latency trade-off analysis — not a single-
+   evaluator study.
+4. **Banglish treated as a distinct script condition**, separable from code-
+   mixing, enabling script-effect vs. mixing-effect analysis that collapsed
+   designs cannot support.
+
+This novelty claim is **working**: it must not be presented as established
+until the literature review and pilot evidence support it. The pilot's
+purpose is to determine whether the methodology can produce the evidence
+needed to support (or revise) this claim.
 
 ## 2. Preliminary Research Questions
 
@@ -163,6 +201,61 @@ Candidate evaluators include:
 - simple lexical/non-neural baselines.
 
 The final evaluator suite will be determined after the pilot.
+
+## 7b. Retrieval and Generation Configurations
+
+The benchmark requires explicit, reproducible retrieval and generation
+configurations. These are stored per-record in the schema fields
+`retrieval_configuration`, `retriever`, `embedding_model`, `reranker`,
+`generator_model`, `generator_version`, `generation_settings`, and
+`prompt_version`. The configurations themselves will be defined in
+machine-readable config files under `configs/` (Milestone 2 implementation).
+
+### Planned retrieval configurations
+
+| Config | Retriever | Embedding model | Reranker | Top-k | Notes |
+|---|---|---|---|---|---|
+| `bm25-bn` | BM25 (Bangla-analyzer) | — | — | 5 | Lexical baseline; Bangla text analyzer required |
+| `dense-bge-m3` | Dense | BGE-M3 (multilingual) | — | 5 | Multilingual encoder; supports Bangla |
+| `dense-bge-m3-rerank` | Dense | BGE-M3 | BGE-reranker-v2 | 5 | Dense + cross-encoder rerank |
+| `hybrid-bm25-dense` | Hybrid (BM25 + dense) | BGE-M3 | optional | 5 | Score fusion (RRF or weighted) |
+
+Retrieval configurations are **independent variables** in the experiment:
+the same question/evidence pair may be run under multiple retrieval configs
+to study whether evaluator reliability is retrieval-sensitive. The exact
+retrieved context is always stored verbatim (`retrieved_context`,
+`retrieval_documents[]`) so that evaluators see exactly what the generator
+saw.
+
+### Planned generation configurations
+
+| Config | Generator | Settings | Notes |
+|---|---|---|---|
+| `gpt-4o-faithful` | GPT-4o | temperature=0, max_tokens=512 | Main generator; faithful answers expected under `correct` evidence |
+| `claude-faithful` | Claude | temperature=0, max_tokens=512 | Cross-model generator; limits single-model bias |
+| `local-llama-bn` | Llama-3.1 (local) | temperature=0, max_tokens=512 | Open/local generator; reproducible without paid API |
+
+Generation settings (temperature, max_tokens, top_p, seed) are stored in
+`generation_settings`. The `random_seed` field records any stochastic
+sampling seed. **Judge models must be disjoint from generator models
+wherever possible** (see [evaluation_protocol.md](evaluation_protocol.md),
+circularity controls) to limit self-preference.
+
+### Controlled evidence construction
+
+The evidence conditions (Section 5) are constructed by one of two paths:
+
+1. **Construction** (no retrieved evidence was altered): an independent
+   non-supporting passage is authored or selected directly. Requires only
+   `evidence_condition_notes`.
+2. **Corruption** (retrieved evidence was modified): the original retrieved
+   passage is altered (sentence removal, context replacement, contradiction
+   injection). Requires `corruption_metadata` with type, original/modified
+   context ids, operation description, and random seed.
+
+Both paths leave the condition auditable. The boundary is defined in
+[data_schema.md](data_schema.md). Corruption operations are seeded and
+reproducible; originals are always preserved in `source_text`.
 
 ## 8. SemFuse
 

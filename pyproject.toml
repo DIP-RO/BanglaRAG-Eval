@@ -14,6 +14,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest"]
+# Local web annotation UI for human annotators (annotation stage).
+annotation = ["flask>=3.0"]
 # Metrics/analysis stack, needed from Milestone 2 onward.
 analysis = ["numpy", "pandas", "scikit-learn", "scipy", "tqdm"]
 

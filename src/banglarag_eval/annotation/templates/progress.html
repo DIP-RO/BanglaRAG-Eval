@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Progress — BanglaRAG-Eval{% endblock %}
+{% block content %}
+<div class="progress-dashboard">
+  <h1>Annotation Progress</h1>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <span class="stat-value">{{ stats.total }}</span>
+      <span class="stat-label">Total records</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value">{{ stats.annotatable }}</span>
+      <span class="stat-label">Annotatable (has answer)</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value">{{ completed_count }}</span>
+      <span class="stat-label">Labeled by you ({{ annotator_id }})</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value">{{ stats.annotated_twice }}</span>
+      <span class="stat-label">Labeled by >= 2 annotators</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value">{{ stats.adjudicated }}</span>
+      <span class="stat-label">Adjudicated</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value">{{ stats.pending_adjudication }}</span>
+      <span class="stat-label">Pending adjudication</span>
+    </div>
+  </div>
+
+  {% if all_annotators %}
+  <h2>Annotators</h2>
+  <ul class="annotator-list">
+    {% for aid in all_annotators %}
+    <li>{{ aid }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  <div class="form-actions">
+    <a href="{{ url_for('annotate_next') }}" class="btn-primary">Continue Annotating</a>
+  </div>
+</div>
+{% endblock %}

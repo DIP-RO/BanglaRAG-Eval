@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Complete — BanglaRAG-Eval Annotation{% endblock %}
+{% block content %}
+<div class="complete-card">
+  <h1>All Done!</h1>
+  <p>You have labeled <strong>{{ completed_count }}</strong> of
+  <strong>{{ total }}</strong> annotatable records.</p>
+  <p>Thank you for your work. You can log out, or check the
+  <a href="{{ url_for('progress') }}">progress dashboard</a>.</p>
+  <div class="form-actions">
+    <a href="{{ url_for('progress') }}" class="btn-secondary">View Progress</a>
+    <form action="{{ url_for('logout') }}" method="post" class="inline">
+      <button type="submit" class="btn-primary">Logout</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

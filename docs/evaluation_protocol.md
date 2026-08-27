@@ -68,6 +68,25 @@ Score-emitting evaluators additionally get score–label agreement statistics
 appropriate to type (e.g. rank correlation between scores and ordinal
 severity), chosen and justified case by case.
 
+### Token-level / span-level evaluation (exploratory)
+
+The primary evaluation is **response-level** (the five-way faithfulness
+category). If the optional token-/span-level human annotation is collected
+(see [annotation_guidelines.md](annotation_guidelines.md)), an additional
+**token-level** analysis becomes possible:
+
+- For encoder-based detectors that emit per-token scores: token-level
+  precision/recall against human-marked unfaithful spans.
+- For LLM judges: whether the judge's explanation localizes the same
+  unfaithful span the human marked.
+- Span-overlap metrics (e.g. IoU on character offsets) between evaluator-
+  identified and human-marked unfaithful regions.
+
+Token-level evaluation is **exploratory in Stage 1**: it is reported only
+if the pilot demonstrates sufficient annotation reliability at the span
+level. No token-level results are reported without the underlying human
+span annotations.
+
 ### Ranking stability
 
 Framework requirement (Milestone 2+): given multiple generators/systems or

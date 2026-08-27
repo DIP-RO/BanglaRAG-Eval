@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Annotate {{ record.example_id }} — BanglaRAG-Eval{% endblock %}
+{% block content %}
+
+<div class="progress-bar">
+  <span>Record {{ current_index + 1 }} of {{ pending_count }} remaining</span>
+  <a href="{{ url_for('progress') }}" class="btn-link">Progress</a>
+</div>
+
+<article class="record">
+  <h2>Question</h2>
+  <div class="field question">{{ record.question }}</div>
+
+  <h2>Retrieved Evidence</h2>
+  <div class="field evidence">
+    {% if record.retrieved_context %}
+      {{ record.retrieved_context }}
+    {% else %}
+      <em>No retrieved context was provided to the generator.</em>
+    {% endif %}
+  </div>
+
+  <h2>Generated Answer</h2>
+  <div class="field answer">{{ record.generated_answer }}</div>
+
+  {% if record.answer_claims %}
+  <details class="claims">
+    <summary>Answer claims (decomposition)</summary>
+    <ul>
+      {% for claim in record.answer_claims %}
+        <li>{{ claim }}</li>
+      {% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+</article>
+
+<form method="post" action="{{ url_for('annotate_record', example_id=record.example_id) }}" class="annotation-form">
+  <h2>Faithfulness Label</h2>
+  <p class="instruction">
+    Judge <strong>faithfulness to the retrieved evidence</strong> — not
+    truth in the world. An answer that is factually true but not supported
+    by the evidence is <em>not</em> faithful.
+  </p>
+
+  <div class="label-choices">
+    {% for label in labels %}
+    <label class="label-option">
+      <input
+        type="radio"
+        name="label"
+        value="{{ label }}"
+        id="label-{{ label }}"
+        required
+      >
+      <span class="label-name">{{ label|replace('_',' ')|title }}</span>
+      <span class="label-desc">{{ label_descriptions[label] }}</span>
+    </label>
+    {% endfor %}
+  </div>
+
+  <h2>Explanation <span class="required">(required)</span></h2>
+  <p class="instruction">
+    Explain why you chose this label. Reference specific claims in the
+    answer and specific parts of the evidence. If no category fits
+    perfectly, choose the closest and begin your explanation with
+    <code>NO-FIT:</code>.
+  </p>
+  <textarea
+    name="explanation"
+    rows="5"
+    required
+    placeholder="e.g. The answer claims X, which is directly supported by the second sentence of the evidence. However, claim Y about Z is not mentioned anywhere in the evidence."
+  ></textarea>
+
+  <div class="form-actions">
+    <button type="submit" class="btn-primary">Save &amp; Next</button>
+    <a href="{{ url_for('progress') }}" class="btn-secondary">Pause</a>
+  </div>
+</form>
+
+{% endblock %}

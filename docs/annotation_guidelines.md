@@ -105,6 +105,27 @@ provisional hallucination type (RAGTruth-inspired): `evident_conflict`,
 `subtle_baseless_information`, `other`. This field is optional in Stage 1 and
 its usefulness is itself under evaluation.
 
+### Token-level / span-level annotation (optional in Stage 1)
+
+The primary annotation is **response-level** (the five-way faithfulness
+category above). In addition, annotators *may* mark the specific token or
+span in the generated answer that triggers the unfaithfulness — the
+**token-/span-level** annotation layer. This serves two purposes:
+
+1. It forces annotators to localize *where* the answer departs from the
+   evidence, improving label quality and explanation specificity.
+2. It enables token-/span-level evaluator comparison in later analysis
+   (e.g., does an encoder detector's per-token score align with the
+   human-marked unfaithful span?).
+
+In Stage 1, token-level annotation is **optional and exploratory**: its
+annotation reliability and usefulness are themselves under evaluation.
+If annotators find it burdensome or unreliable at pilot scale, it may be
+dropped or deferred. The schema does not yet have a dedicated field for
+token-level spans; if the pilot shows it is useful, a schema extension
+(e.g. an `unfaithful_spans[]` array on each annotation) will be added in
+a versioned schema bump — never as an ad-hoc field.
+
 ## Language-condition-specific notes
 
 - **Native Bangla / Translated Bangla:** judged identically; annotators are

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Adjudication Queue — BanglaRAG-Eval{% endblock %}
+{% block content %}
+<div class="adjudicate-list">
+  <h1>Adjudication Queue</h1>
+  <p>{{ count }} record(s) with annotator disagreement need adjudication.</p>
+
+  {% if disagreements %}
+  <table class="disagreement-table">
+    <thead>
+      <tr>
+        <th>Example ID</th>
+        <th>Question</th>
+        <th>Disagreeing labels</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in disagreements %}
+      <tr>
+        <td><code>{{ d.example_id }}</code></td>
+        <td class="question-cell">{{ d.question[:80] }}{% if d.question|length > 80 %}…{% endif %}</td>
+        <td>{{ d.labels | join(', ') }}</td>
+        <td>
+          <a href="{{ url_for('adjudicate_record', example_id=d.example_id) }}" class="btn-primary">Adjudicate</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty-state">No disagreements to adjudicate. Either all annotations
+  agree, or there are not yet enough annotations to require adjudication.</p>
+  {% endif %}
+</div>
+{% endblock %}

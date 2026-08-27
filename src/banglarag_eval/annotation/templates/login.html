@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Login — BanglaRAG-Eval Annotation{% endblock %}
+{% block content %}
+<div class="login-card">
+  <h1>Annotator Login</h1>
+  <p>Enter your annotator ID to begin. This ID is stored with your labels
+  for reproducibility and inter-annotator agreement calculation.</p>
+  <form method="post" action="{{ url_for('login') }}">
+    <label for="annotator_id">Annotator ID</label>
+    <input
+      type="text"
+      id="annotator_id"
+      name="annotator_id"
+      placeholder="e.g. ann-1"
+      required
+      autofocus
+    >
+    <button type="submit" class="btn-primary">Start Annotating</button>
+  </form>
+</div>
+{% endblock %}

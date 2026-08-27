@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Adjudicate {{ record.example_id }} — BanglaRAG-Eval{% endblock %}
+{% block content %}
+
+<div class="progress-bar">
+  <a href="{{ url_for('adjudicate_list') }}" class="btn-link">&larr; Back to queue</a>
+</div>
+
+<article class="record">
+  <h2>Question</h2>
+  <div class="field question">{{ record.question }}</div>
+
+  <h2>Retrieved Evidence</h2>
+  <div class="field evidence">
+    {% if record.retrieved_context %}
+      {{ record.retrieved_context }}
+    {% else %}
+      <em>No retrieved context.</em>
+    {% endif %}
+  </div>
+
+  <h2>Generated Answer</h2>
+  <div class="field answer">{{ record.generated_answer }}</div>
+</article>
+
+<section class="disagreeing-annotations">
+  <h2>Annotator Labels (disagreeing)</h2>
+  <table class="annotation-table">
+    <thead>
+      <tr>
+        <th>Annotator</th>
+        <th>Label</th>
+        <th>Explanation</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for ann in record.annotations %}
+      <tr>
+        <td><code>{{ ann.annotator_id }}</code></td>
+        <td>{{ ann.label | replace('_',' ') | title }}</td>
+        <td>{{ ann.explanation }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<form method="post" action="{{ url_for('adjudicate_record', example_id=record.example_id) }}" class="annotation-form">
+  <h2>Adjudication Decision</h2>
+  <p class="instruction">
+    As adjudicator, you assign the final gold label. Review the
+    disagreeing annotations above, then make your own judgment based
+    on the answer's faithfulness to the retrieved evidence.
+  </p>
+
+  <div class="label-choices">
+    {% for label in labels %}
+    <label class="label-option">
+      <input
+        type="radio"
+        name="label"
+        value="{{ label }}"
+        id="label-{{ label }}"
+        required
+      >
+      <span class="label-name">{{ label|replace('_',' ')|title }}</span>
+      <span class="label-desc">{{ label_descriptions[label] }}</span>
+    </label>
+    {% endfor %}
+  </div>
+
+  <h2>Resolution Method</h2>
+  <div class="method-choices">
+    {% for method in methods %}
+    <label class="method-option">
+      <input type="radio" name="method" value="{{ method }}" {% if loop.first %}checked{% endif %} required>
+      <span class="method-name">{{ method | replace('_',' ') | title }}</span>
+    </label>
+    {% endfor %}
+  </div>
+  <p class="instruction">
+    <strong>third_rater</strong>: you are an independent adjudicator who
+    did not annotate this record (your ID must differ from the annotators
+    above). <strong>joint_session</strong>: the annotators resolved this
+    together; you are recording the consensus.
+  </p>
+
+  <h2>Explanation <span class="required">(required)</span></h2>
+  <textarea
+    name="explanation"
+    rows="5"
+    required
+    placeholder="Explain why this is the correct gold label, referencing the specific disagreement."
+  ></textarea>
+
+  <div class="form-actions">
+    <button type="submit" class="btn-primary">Save Adjudication</button>
+    <a href="{{ url_for('adjudicate_list') }}" class="btn-secondary">Cancel</a>
+  </div>
+</form>
+
+{% endblock %}
