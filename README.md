@@ -48,6 +48,15 @@ graph TB
         FIXTURES["fixtures.py<br/>10-example synthetic builder"]
     end
 
+    subgraph Pipeline["Milestone 2 Pipeline (src/banglarag_eval/pipeline/)"]
+        SOURCES["sources.py<br/>Source document interface"]
+        QUESTIONS["questions.py<br/>Question generation"]
+        RETRIEVER["retriever.py<br/>BM25 lexical retriever"]
+        GENERATOR["generator.py<br/>Ollama/Qwen3 adapter"]
+        EVIDENCE["evidence.py<br/>Evidence corruption"]
+        ORCHESTRATOR["orchestrator.py<br/>Full pipeline runner"]
+    end
+
     subgraph Annotation["Annotation UI (src/banglarag_eval/annotation/)"]
         STORE["store.py<br/>JSONL annotation store"]
         FLASKAPP["app.py<br/>Flask web server"]
@@ -56,12 +65,15 @@ graph TB
 
     subgraph Data["Data Layer"]
         FIXTUREJSONL["data/fixtures/<br/>synthetic_fixture_v0.jsonl"]
-        PILOTJSONL["data/pilot_stage1.jsonl<br/>(Milestone 2)"]
+        PILOTJSONL["data/pilot_stage1_real.jsonl<br/>(real pipeline output)"]
+        ANNOTATED["data/pilot_stage1_annotated_v0.jsonl<br/>(after human annotation)"]
     end
 
-    subgraph Tests["Test Suite (tests/)"]
-        TESTSCHEMA["test_schema_validation.py<br/>97 tests"]
-        TESTANNOT["test_annotation.py<br/>33 tests"]
+    subgraph Tests["Test Suite (tests/) — 240 tests"]
+        TESTSCHEMA["test_schema_validation.py"]
+        TESTANNOT["test_annotation.py"]
+        TESTPIPE["test_pipeline.py<br/>69 pipeline tests"]
+        TESTEDGE["test_edge_cases.py<br/>41 edge-case tests"]
         TESTOTHER["test_config, test_sampling,<br/>test_dataset, test_conditions,<br/>test_end_to_end"]
     end
 
@@ -76,17 +88,23 @@ graph TB
     SAMPLING --> DATASET
     FIXTURES --> DATASET
 
+    SOURCES --> ORCHESTRATOR
+    QUESTIONS --> ORCHESTRATOR
+    RETRIEVER --> ORCHESTRATOR
+    EVIDENCE --> ORCHESTRATOR
+    GENERATOR --> ORCHESTRATOR
+    ORCHESTRATOR --> PILOTJSONL
+
     DATASET --> STORE
     STORE --> FLASKAPP
     FLASKAPP --> TEMPLATES
-
-    DATASET --> FIXTUREJSONL
-    DATASET --> PILOTJSONL
-    STORE --> PILOTJSONL
+    PILOTJSONL --> STORE
+    STORE --> ANNOTATED
 
     SCHEMAMOD --> TESTSCHEMA
     STORE --> TESTANNOT
     FLASKAPP --> TESTANNOT
+    ORCHESTRATOR --> TESTPIPE
     DATASET --> TESTOTHER
     SAMPLING --> TESTOTHER
 ```
@@ -96,26 +114,26 @@ graph TB
 ## Pipeline Flow
 
 Every benchmark record is **created once and enriched by later stages**
-without ever being redesigned. Scaling from 10 → 50 → 500 examples changes
-only data volume, never structure.
+without ever being redesigned. The pipeline runs end-to-end:
+source documents → question generation → retrieval → evidence construction
+→ generation → human annotation → evaluation.
 
 ```mermaid
 flowchart LR
     subgraph Stage1["1. Data Construction"]
-        SOURCE["Source Documents<br/>(local, Bangla Wikipedia, curated)"]
-        QUESTION["Question Generation<br/>+ source span + intended answer"]
-        EVIDENCE["Evidence Condition<br/>Construction / Corruption"]
+        SOURCE["Source Documents<br/>(8 Bangla + 2 English curated)"]
+        QUESTION["Question Generation<br/>100 questions across<br/>5 language conditions"]
+        EVIDENCE["Evidence Condition<br/>Construction / Corruption<br/>(5 conditions)"]
     end
 
     subgraph Stage2["2. Retrieval"]
-        RETRIEVE["Retriever<br/>(BM25 / Dense / Hybrid)"]
-        RERANK["Reranker<br/>(optional)"]
+        RETRIEVE["BM25 Lexical Retriever<br/>(Bangla-aware tokenization)"]
         CONTEXT["retrieved_context<br/>+ retrieval_documents[]"]
     end
 
     subgraph Stage3["3. Generation"]
-        GENERATOR["Generator<br/>(GPT-4o / Claude / Local)"]
-        ANSWER["generated_answer<br/>+ answer_claims[]"]
+        GENERATOR["Ollama / Qwen3:8b<br/>(local, no paid API)"]
+        ANSWER["generated_answer<br/>+ generation metadata"]
     end
 
     subgraph Stage4["4. Human Annotation"]
@@ -131,7 +149,7 @@ flowchart LR
     end
 
     SOURCE --> QUESTION --> EVIDENCE
-    EVIDENCE --> RETRIEVE --> RERANK --> CONTEXT
+    EVIDENCE --> RETRIEVE --> CONTEXT
     CONTEXT --> GENERATOR --> ANSWER
     ANSWER --> ANN1
     ANSWER --> ANN2
@@ -164,6 +182,159 @@ flowchart LR
   write only to `evaluator_outputs[]`.
 - **Previous stages are never overwritten.** `save_dataset()` refuses to
   overwrite by default; corrections create a new `dataset_version`.
+
+---
+
+## Dataset Lifecycle — Where Data Lives, How Annotation Works, Where It's Stored
+
+This section explains the complete data flow from pipeline output to
+annotated gold-standard dataset.
+
+### Step 1: Pipeline generates the dataset
+
+```bash
+.venv/bin/python scripts/run_pipeline.py --output data/pilot_stage1_real.jsonl
+```
+
+The pipeline produces `data/pilot_stage1_real.jsonl` — 500 records
+(100 questions × 5 evidence conditions) with:
+
+- Source documents and spans
+- Questions in 5 language conditions
+- BM25 retrieval results
+- Controlled evidence (correct / partially_relevant / irrelevant / contradictory / missing)
+- Generated answers from Qwen3:8b via Ollama
+- **No gold labels** — `gold_label: null`, `annotations: []`
+
+### Step 2: Copy for annotation (protect the original)
+
+```bash
+cp data/pilot_stage1_real.jsonl data/pilot_stage1_annotated_v0.jsonl
+```
+
+The original `pilot_stage1_real.jsonl` is the pipeline output — never annotate
+it directly. Always work on a copy so the pipeline output remains reproducible.
+
+### Step 3: Human annotation via web UI
+
+```bash
+.venv/bin/python scripts/run_annotation_server.py \
+    --dataset data/pilot_stage1_annotated_v0.jsonl \
+    --mode annotate
+```
+
+Open `http://127.0.0.1:5000` in your browser.
+
+**What the annotator sees:**
+- Question (in Bangla, English, code-mixed, or Banglish)
+- Retrieved evidence/context
+- Generated answer
+
+**What the annotator does NOT see (hidden by the store):**
+- Source document text
+- Intended answer
+- Evidence condition (correct/irrelevant/contradictory/etc.)
+- Corruption metadata
+- Other annotators' labels
+- Automatic evaluator outputs
+
+**Where annotations are stored:** Annotations are saved **in place** to the
+same JSONL file passed with `--dataset` (i.e.,
+`data/pilot_stage1_annotated_v0.jsonl`). Each annotation is appended to the
+record's `annotations[]` array. The file is rewritten after each submission
+with full schema validation.
+
+### Step 4: Second annotator (independent)
+
+A second person logs in with a different ID (e.g., `ann-2`) and labels the
+same records. They cannot see annotator 1's labels.
+
+### Step 5: Adjudication (if annotators disagree)
+
+```bash
+.venv/bin/python scripts/run_annotation_server.py \
+    --dataset data/pilot_stage1_annotated_v0.jsonl \
+    --mode adjudicate
+```
+
+When annotators disagree, an adjudicator (a third person, never one of the
+annotators — schema rule R8) reviews both labels and explanations, then
+assigns the final gold label. The adjudication record is saved to the same
+JSONL file.
+
+### Step 6: Gold labels are set
+
+Gold labels (`faithfulness_category`) are set only through:
+- **Unanimous agreement** — both annotators pick the same label → gold is set automatically
+- **Adjudication** — third rater picks the final label → gold is set from adjudication
+
+Schema rule R3 prevents any gold label from existing without human provenance.
+
+### Data file summary
+
+| File | Purpose | Gold labels? |
+|---|---|---|
+| `data/fixtures/synthetic_fixture_v0.jsonl` | 10-record synthetic test fixture | No |
+| `data/pilot_stage1_real.jsonl` | Pipeline output (500 records) | No |
+| `data/pilot_stage1_annotated_v0.jsonl` | Copy for human annotation | Yes (after annotation) |
+
+---
+
+## RAGTruth and the English Baseline
+
+### Supervisor's guidance
+
+> "RAGTruth is the best place to start, not necessarily the final dataset.
+> It gives us a strong English reference point; then we need to establish
+> what genuinely new Bangla/native/code-mixed component we should build."
+>
+> "But don't download/translate it into data/ yet. First we need to verify
+> the license and decide exactly which subset we can adapt for Bangla."
+
+### What RAGTruth provides
+
+RAGTruth (MIT licensed, by Particle Media) contains:
+
+- **`source_info.jsonl`** — source/context text, task type (Summary/QA/Data2txt),
+  source collection (CNN/DM, etc.), and the original prompt
+- **`response.jsonl`** — generated responses from multiple LLMs (GPT-4, GPT-3.5,
+  Mistral, Llama-2) with hallucination span annotations:
+  - `Evident Conflict` — response contradicts source
+  - `Subtle Conflict` — minor contradiction
+  - `Evident Baseless Info` — unsupported claim
+  - `Subtle Baseless Info` — subtly unsupported claim
+
+### How we use RAGTruth (and what we don't do)
+
+| What we do | What we don't do |
+|---|---|
+| Use RAGTruth as a structural reference for our schema | Download it into `data/` as-is |
+| Use it for the English baseline condition only | Translate RAGTruth into Bangla |
+| Learn from its hallucination annotation taxonomy | Use RAGTruth annotations as our gold labels |
+| Compare our Bangla findings against English RAGTruth results | Claim RAGTruth covers Bangla (it doesn't) |
+
+### What's genuinely new in our Bangla component
+
+RAGTruth is English-only. Our contribution is:
+
+1. **Native Bangla source documents** — 8 curated Bangla passages about
+   Bangladesh (geography, history, culture, economy) with questions targeting
+   specific evidence spans
+2. **5 language conditions** — native Bangla, translated Bangla, code-mixed
+   (Bangla+English in Bengali script), Banglish (romanized Bangla), English baseline
+3. **Bangla-aware retrieval** — BM25 with tokenization that handles Bengali
+   Unicode script
+4. **Controlled evidence corruption in Bangla** — irrelevant passages and
+   contradiction prefixes in Bengali
+5. **Local generation** — Qwen3:8b via Ollama, no paid API required
+6. **Independent human annotation** — Bangla-speaking annotators label
+   faithfulness using our 5-way taxonomy
+
+The `load_ragtruth_english()` function in
+[src/banglarag_eval/pipeline/sources.py](src/banglarag_eval/pipeline/sources.py)
+can load RAGTruth's `source_info.jsonl` for the English baseline condition,
+but it is not called by the default pipeline. RAGTruth data is not stored
+in `data/`.
 
 ---
 
@@ -209,6 +380,23 @@ flowchart TB
 | Condition integrity | ≥ 90% blind re-label match | Fix construction; regenerate cells |
 | Pipeline integrity | 100% records pass validation | Fix tooling |
 | Evaluator harness | ≥ 95% evaluator output success | Fix adapters; re-run |
+
+### Current status
+
+| Component | Status |
+|---|---|
+| Schema and validation (R1–R10) | Complete — 240 tests passing |
+| Annotation UI | Complete — Flask web app with login, annotate, adjudicate |
+| Source document interface | Complete — 8 Bangla + 2 English curated documents |
+| Question generation | Complete — 100 questions across 5 language conditions |
+| BM25 retrieval | Complete — Bangla-aware tokenization |
+| Generation (Ollama/Qwen3) | Complete — local generation, no paid API |
+| Evidence corruption | Complete — 5 conditions with metadata |
+| Real pilot dataset | In progress — pipeline running |
+| Human annotation | Not started — needs 2 independent annotators |
+| Stage 1 gates | Not measured — needs annotation first |
+| Evaluator framework | Not started (Milestone 2 issue #11) |
+| Statistical analysis | Not started (Milestone 2 issue #13) |
 
 ---
 
@@ -402,11 +590,45 @@ Gold labels must be independently established through human annotation.
 
 ## Running Locally (No Paid APIs Required)
 
+### Prerequisites
+
 ```bash
+# Create virtual environment
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-.venv/bin/python -m pytest tests/            # full validation suite (130 tests)
-.venv/bin/python scripts/build_synthetic_fixture.py   # regenerate fixture
+
+# Install Ollama for local generation
+# Download from https://ollama.com
+ollama pull qwen3:8b    # ~5GB, one-time download
+```
+
+### Run the test suite
+
+```bash
+.venv/bin/python -m pytest tests/            # 240 tests
+```
+
+### Build the pilot dataset
+
+```bash
+# Full pipeline with Ollama generation (500 records, ~35 min):
+.venv/bin/python scripts/run_pipeline.py
+
+# Offline mode (no Ollama, uses intended answers as placeholders):
+.venv/bin/python scripts/run_pipeline.py --no-ollama
+
+# Specific conditions only:
+.venv/bin/python scripts/run_pipeline.py \
+    --languages native_bangla code_mixed \
+    --evidence correct contradictory
+```
+
+Output: `data/pilot_stage1_real.jsonl` (500 records, no gold labels).
+
+### Regenerate the synthetic fixture
+
+```bash
+.venv/bin/python scripts/build_synthetic_fixture.py
 ```
 
 A 10-example synthetic fixture
@@ -429,14 +651,17 @@ evidence condition, evaluator outputs, or other annotators' labels).
 # Install Flask (if not already installed):
 .venv/bin/pip install flask>=3.0
 
-# Start the annotation server on a pilot dataset:
+# 1. Copy the pipeline output for annotation (protect the original):
+cp data/pilot_stage1_real.jsonl data/pilot_stage1_annotated_v0.jsonl
+
+# 2. Start the annotation server:
 .venv/bin/python scripts/run_annotation_server.py \
-    --dataset data/pilot_stage1.jsonl \
+    --dataset data/pilot_stage1_annotated_v0.jsonl \
     --mode annotate
 
-# For adjudication (resolving annotator disagreements):
+# 3. For adjudication (resolving annotator disagreements):
 .venv/bin/python scripts/run_annotation_server.py \
-    --dataset data/pilot_stage1.jsonl \
+    --dataset data/pilot_stage1_annotated_v0.jsonl \
     --mode adjudicate
 ```
 
@@ -482,7 +707,7 @@ BanglaRAG-Eval/
 ├── README.md
 ├── CONTRIBUTING.md
 ├── LICENSE
-├── .env.example        # environment variable template (no secrets committed)
+├── .env.example        # environment variable template (Ollama, OpenAI, etc.)
 ├── .gitignore
 ├── requirements.txt
 ├── pyproject.toml
@@ -491,8 +716,10 @@ BanglaRAG-Eval/
 │   ├── pilot_stage1.yaml
 │   ├── pilot_stage2.yaml
 │   └── schema/record.schema.json
-├── data/               # fixtures (committed); raw/private data ignored
-│   └── fixtures/synthetic_fixture_v0.jsonl
+├── data/               # fixtures (committed); pilot data (git-ignored)
+│   ├── fixtures/synthetic_fixture_v0.jsonl   # 10-record test fixture
+│   ├── pilot_stage1_real.jsonl               # pipeline output (not committed)
+│   └── pilot_stage1_annotated_v0.jsonl       # annotated copy (not committed)
 ├── docs/               # protocol, pilot design, schema, annotation, evaluation
 │   ├── RESEARCH_PROTOCOL.md
 │   ├── pilot_design.md
@@ -500,9 +727,10 @@ BanglaRAG-Eval/
 │   ├── annotation_guidelines.md
 │   └── evaluation_protocol.md
 ├── experiments/        # experiment definitions (Milestone 2+)
-├── scripts/            # fixture builder, annotation server launcher
+├── scripts/            # fixture builder, annotation server, pipeline runner
 │   ├── build_synthetic_fixture.py
-│   └── run_annotation_server.py
+│   ├── run_annotation_server.py
+│   └── run_pipeline.py                 # Milestone 2 pipeline runner
 ├── src/                # banglarag_eval package
 │   └── banglarag_eval/
 │       ├── annotation/ # Flask web UI for human annotation + adjudication
@@ -511,6 +739,14 @@ BanglaRAG-Eval/
 │       │   ├── store.py     # JSONL annotation store with validation
 │       │   ├── templates/   # 6 HTML templates
 │       │   └── static/      # CSS with Bengali font support
+│       ├── pipeline/   # Milestone 2 pipeline (real data construction)
+│       │   ├── __init__.py
+│       │   ├── sources.py       # Source document interface + RAGTruth loader
+│       │   ├── questions.py     # Question generation + language transforms
+│       │   ├── retriever.py     # BM25 lexical retriever (Bangla-aware)
+│       │   ├── generator.py     # Ollama/Qwen3 generation adapter
+│       │   ├── evidence.py      # Evidence construction + controlled corruption
+│       │   └── orchestrator.py  # Full pipeline runner
 │       ├── __init__.py
 │       ├── config.py   # pilot config loading + validation
 │       ├── constants.py# canonical condition vocabularies
@@ -518,13 +754,40 @@ BanglaRAG-Eval/
 │       ├── fixtures.py # 10-example synthetic fixture builder
 │       ├── sampling.py # deterministic condition-cell allocation
 │       └── schema.py   # record schema + 10 cross-field validation rules
-└── tests/              # 130 tests: schema, config, sampling, dataset, e2e, annotation
+└── tests/              # 240 tests
     ├── conftest.py
-    ├── test_schema_validation.py
-    ├── test_conditions.py
-    ├── test_config.py
-    ├── test_sampling.py
-    ├── test_dataset_loading.py
-    ├── test_end_to_end_fixture.py
-    └── test_annotation.py
+    ├── test_schema_validation.py    # 46 tests — schema rules R1–R10
+    ├── test_conditions.py           # 16 tests — condition vocabularies
+    ├── test_config.py               # 12 tests — config loading + validation
+    ├── test_sampling.py             # 6 tests  — deterministic allocation
+    ├── test_dataset_loading.py      # 8 tests  — JSONL I/O
+    ├── test_end_to_end_fixture.py   # 9 tests  — fixture → validate → save
+    ├── test_annotation.py           # 33 tests — annotation store + Flask UI
+    ├── test_edge_cases.py           # 41 tests — edge cases across all modules
+    └── test_pipeline.py             # 69 tests — Milestone 2 pipeline
 ```
+
+---
+
+## GitHub Issues and Milestones
+
+The complete roadmap is tracked in [GitHub Issues](https://github.com/shohel1arman/BanglaRAG-Eval/issues):
+
+| Issue | Title | Milestone | Status |
+|---|---|---|---|
+| #2 | Milestone 1 Complete | M1 | Closed |
+| #3 | Source Document Interface | M2 | Implemented |
+| #4 | Question Generation Pipeline | M2 | Implemented |
+| #5 | Retrieval Pipeline | M2 | Implemented |
+| #6 | Generation Pipeline | M2 | Implemented |
+| #7 | Evidence Construction + Corruption | M2 | Implemented |
+| #8 | Build Real 30–50 Example Pilot Dataset | M2 | In progress |
+| #9 | Run Two Independent Annotators + Adjudication | M2 | Open |
+| #10 | Measure Stage 1 Gates | M2 | Open |
+| #11 | Evaluator Framework | M2 | Open |
+| #12 | Metrics Module | M2 | Open |
+| #13 | Statistical Analysis Module | M2 | Open |
+| #14 | Ranking Stability Framework | M2 | Open |
+| #15 | SemFuse RAGBackend Interface | M2 | Open |
+| #16 | Scale to 300–500 Examples | M3 | Open |
+| #17 | Full Experiment Campaign + ICLR 2027 Paper | M3 | Open |
