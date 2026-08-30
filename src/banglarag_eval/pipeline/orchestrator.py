@@ -165,49 +165,50 @@ def build_pilot_records(
                 generation_tokens = 0
 
             record_id = _make_record_id(q_spec.language_condition, evidence_condition, record_index)
+            ts = _iso_timestamp()
 
             record = {
-                "record_id": record_id,
+                # Required schema fields (flat structure per record.schema.json)
+                "schema_version": "1.0.0",
+                "example_id": record_id,
+                "document_id": source_doc.document_id,
+                "source_id": source_doc.document_id,
+                "question": q_spec.question,
+                "question_language": q_spec.question_language,
                 "language_condition": q_spec.language_condition,
+                "data_origin": q_spec.data_origin,
+                "source_text": source_doc.text,
+                "source_span": q_spec.source_span,
+                "intended_answer": q_spec.intended_answer,
                 "evidence_condition": evidence_condition,
-                "source": {
-                    "document_id": source_doc.document_id,
-                    "source_collection": source_doc.source_collection,
-                    "license": source_doc.license,
-                    "source_text": source_doc.text,
-                    "source_span": q_spec.source_span,
-                },
-                "question": {
-                    "text": q_spec.question,
-                    "language": q_spec.question_language,
-                    "data_origin": q_spec.data_origin,
-                    "intended_answer": q_spec.intended_answer,
-                },
-                "retriever": "lexical_bm25",
-                "retrieval_configuration": retrieval.configuration,
+                "evidence_condition_notes": evidence.evidence_condition_notes,
                 "retrieved_context": evidence.retrieved_context,
                 "retrieval_documents": evidence.retrieval_documents,
-                "generation": {
-                    "model": generation_model,
+                "retrieval_configuration": retrieval.configuration,
+                "retriever": "lexical_bm25",
+                "generated_answer": generated_answer,
+                "answer_claims": [],
+                "generator_model": generation_model,
+                "generation_settings": {
                     "temperature": 0.0,
                     "seed": 42,
                     "latency_seconds": generation_latency,
                     "token_count": generation_tokens,
                     "prompt_template": "rag_standard",
-                    "timestamp": _iso_timestamp(),
                 },
-                "generated_answer": generated_answer,
-                "answer_claims": [],  # To be filled by claim extraction
+                "prompt_version": "rag_standard_v1",
                 "corruption_metadata": evidence.corruption_metadata,
-                "evidence_condition_notes": evidence.evidence_condition_notes,
                 "annotations": [],
-                "gold_label": None,
+                "faithfulness_category": None,
+                "hallucination_type": None,
                 "adjudication": None,
-                "metadata": {
-                    "pipeline_version": "milestone2-v1",
-                    "created_at": _iso_timestamp(),
-                    "seed": seed + record_index,
-                },
+                "evaluator_outputs": [],
+                "dataset_version": "pilot_stage1_v0",
+                "timestamp": ts,
+                "random_seed": seed + record_index,
+                "latency": generation_latency,
+                "cost": None,
+                "notes": None,
             }
 
             records.append(record)
@@ -273,7 +274,7 @@ def run_pipeline(
     from collections import Counter
     lang_counts = Counter(r["language_condition"] for r in records)
     evidence_counts = Counter(r["evidence_condition"] for r in records)
-    model_counts = Counter(r["generation"]["model"] for r in records)
+    model_counts = Counter(r["generator_model"] for r in records)
 
     return {
         "total_records": len(records),

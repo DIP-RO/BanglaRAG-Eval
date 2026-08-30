@@ -32,3 +32,6 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "real: marks tests that use real Ollama/external services (skipped if unavailable)",
+]

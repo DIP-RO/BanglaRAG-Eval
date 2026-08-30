@@ -8,6 +8,8 @@ Tests cover:
 - Ollama generation adapter (mocked, no real API calls)
 - Pipeline orchestrator (offline mode)
 - Record schema compliance
+- Real integration tests (with live Ollama, skipped if unavailable)
+- Real dataset validation (against generated pilot_stage1_real.jsonl)
 """
 
 import json
@@ -540,7 +542,7 @@ class TestOrchestrator:
         assert len(records) > 0
         assert all(r["language_condition"] == "native_bangla" for r in records)
         assert all(r["evidence_condition"] == "correct" for r in records)
-        assert all(r["generation"]["model"] == "placeholder_offline" for r in records)
+        assert all(r["generator_model"] == "placeholder_offline" for r in records)
 
     def test_build_pilot_records_all_conditions_offline(self):
         records = build_pilot_records(use_ollama=False)
@@ -557,15 +559,18 @@ class TestOrchestrator:
             use_ollama=False,
         )
         for record in records:
-            # Should have required top-level fields
-            assert "record_id" in record
+            # Should have required top-level fields (flat schema)
+            assert "example_id" in record
             assert "language_condition" in record
             assert "evidence_condition" in record
-            assert "source" in record
+            assert "source_text" in record
             assert "question" in record
             assert "generated_answer" in record
             assert "annotations" in record
-            assert "gold_label" in record
+            assert "faithfulness_category" in record
+            assert "schema_version" in record
+            assert "document_id" in record
+            assert "timestamp" in record
 
     def test_build_pilot_records_has_source_span(self):
         records = build_pilot_records(
@@ -574,9 +579,9 @@ class TestOrchestrator:
             use_ollama=False,
         )
         for record in records:
-            assert "source_span" in record["source"]
-            assert "start_char" in record["source"]["source_span"]
-            assert "end_char" in record["source"]["source_span"]
+            assert "source_span" in record
+            assert "start_char" in record["source_span"]
+            assert "end_char" in record["source_span"]
 
     def test_build_pilot_records_has_retrieval_config(self):
         records = build_pilot_records(
@@ -609,24 +614,24 @@ class TestOrchestrator:
             assert record["retrieved_context"] == ""
             assert len(record["retrieval_documents"]) == 0
 
-    def test_build_pilot_records_no_gold_labels(self):
+    def test_build_pilot_records_no_faithfulness_categorys(self):
         """Gold labels must not be set automatically."""
         records = build_pilot_records(use_ollama=False)
         for record in records:
-            assert record["gold_label"] is None
+            assert record["faithfulness_category"] is None
             assert record["adjudication"] is None
             assert record["annotations"] == []
 
     def test_build_pilot_records_intended_answer_hidden(self):
-        """intended_answer should be in question metadata, not in gold_label."""
+        """intended_answer should be in question metadata, not in faithfulness_category."""
         records = build_pilot_records(
             language_conditions=["native_bangla"],
             evidence_conditions=["correct"],
             use_ollama=False,
         )
         for record in records:
-            assert record["question"]["intended_answer"] is not None
-            assert record["gold_label"] is None
+            assert record["intended_answer"] is not None
+            assert record["faithfulness_category"] is None
 
     def test_save_pilot_dataset(self, tmp_path):
         records = build_pilot_records(
@@ -642,10 +647,10 @@ class TestOrchestrator:
         assert len(lines) == len(records)
         for line in lines:
             data = json.loads(line)
-            assert "record_id" in data
+            assert "example_id" in data
 
     def test_save_pilot_dataset_creates_parent_dir(self, tmp_path):
-        records = [{"record_id": "test", "data": "value"}]
+        records = [{"example_id": "test", "data": "value"}]
         output = tmp_path / "subdir" / "test.jsonl"
         save_pilot_dataset(records, output)
         assert output.exists()
@@ -693,8 +698,8 @@ class TestOrchestrator:
             use_ollama=False,
             seed=42,
         )
-        ids1 = [r["record_id"] for r in records1]
-        ids2 = [r["record_id"] for r in records2]
+        ids1 = [r["example_id"] for r in records1]
+        ids2 = [r["example_id"] for r in records2]
         assert ids1 == ids2
 
     def test_bangla_unicode_preserved(self):
@@ -705,9 +710,9 @@ class TestOrchestrator:
         )
         for record in records:
             # Source text should contain Bangla characters (native_bangla uses Bangla docs)
-            assert any(ord(c) > 0x0980 for c in record["source"]["source_text"])
+            assert any(ord(c) > 0x0980 for c in record["source_text"])
             # Question should contain Bangla characters
-            assert any(ord(c) > 0x0980 for c in record["question"]["text"])
+            assert any(ord(c) > 0x0980 for c in record["question"])
 
     def test_code_mixed_contains_english(self):
         records = build_pilot_records(
@@ -717,7 +722,7 @@ class TestOrchestrator:
         )
         for record in records:
             # Code-mixed questions should contain ASCII letters
-            assert any(c.isascii() and c.isalpha() for c in record["question"]["text"])
+            assert any(c.isascii() and c.isalpha() for c in record["question"])
 
     def test_banglish_is_romanized(self):
         records = build_pilot_records(
@@ -727,4 +732,414 @@ class TestOrchestrator:
         )
         for record in records:
             # Banglish should not contain Bengali script
-            assert not any(ord(c) > 0x0980 for c in record["question"]["text"])
+            assert not any(ord(c) > 0x0980 for c in record["question"])
+
+
+# ── Real integration tests (with live Ollama) ──────────────────────
+# These tests actually call Ollama and test the real pipeline.
+# They are skipped automatically if Ollama is not running.
+
+def _ollama_running():
+    """Check if Ollama is running locally."""
+    try:
+        import urllib.request
+        req = urllib.request.Request("http://localhost:11434/api/tags")
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            return resp.status == 200
+    except Exception:
+        return False
+
+
+pytestmark_ollama = pytest.mark.skipif(
+    not _ollama_running(),
+    reason="Ollama not running at localhost:11434 — start with 'ollama serve'",
+)
+
+
+@pytest.mark.real
+@pytestmark_ollama
+class TestRealOllamaGeneration:
+    """Test real Ollama generation with Qwen3:8b."""
+
+    def test_real_generate_bangla(self):
+        """Test that Ollama actually generates Bangla text."""
+        result = generate(
+            question="বাংলাদেশের রাজধানীর নাম কী?",
+            context="বাংলাদেশের রাজধানী ঢাকা। ঢাকা বুড়িগঙ্গা নদীর তীরে অবস্থিত।",
+            temperature=0.0,
+            timeout=120,
+        )
+        assert result.answer
+        assert len(result.answer) > 0
+        assert result.model == "qwen3:8b"
+        assert result.latency_seconds > 0
+        # Answer should mention Dhaka
+        assert "ঢাকা" in result.answer or "Dhaka" in result.answer.lower()
+
+    def test_real_generate_english(self):
+        """Test that Ollama generates English text."""
+        result = generate(
+            question="What is the capital of Bangladesh?",
+            context="Bangladesh is a country in South Asia. Its capital is Dhaka.",
+            temperature=0.0,
+            timeout=120,
+        )
+        assert result.answer
+        assert len(result.answer) > 0
+        assert "dhaka" in result.answer.lower() or "Dhaka" in result.answer
+
+    def test_real_generate_no_thinking_in_answer(self):
+        """Test that thinking trace is stripped from real output."""
+        result = generate(
+            question="বাংলাদেশের রাজধানীর নাম কী?",
+            context="বাংলাদেশের রাজধানী ঢাকা।",
+            temperature=0.0,
+            timeout=120,
+        )
+        # Answer should not contain thinking tags
+        assert "<think>" not in result.answer
+        assert "</think>" not in result.answer
+        # Answer should not start with "Answer:"
+        assert not result.answer.startswith("Answer:")
+
+    def test_real_generate_missing_evidence(self):
+        """Test generation with no context (missing evidence condition)."""
+        result = generate(
+            question="বাংলাদেশের রাজধানীর নাম কী?",
+            context="(no context provided)",
+            temperature=0.0,
+            timeout=120,
+        )
+        assert result.answer
+        assert len(result.answer) > 0
+        # Model should say it can't answer or provide the answer from its own knowledge
+
+    def test_real_generate_code_mixed(self):
+        """Test generation with code-mixed question."""
+        result = generate(
+            question="Bangladesh er rajdhanir nam ki?",
+            context="বাংলাদেশের রাজধানী ঢাকা। ঢাকা বুড়িগঙ্গা নদীর তীরে অবস্থিত।",
+            temperature=0.0,
+            timeout=120,
+        )
+        assert result.answer
+        assert len(result.answer) > 0
+
+
+@pytest.mark.real
+@pytestmark_ollama
+class TestRealRetrieval:
+    """Test real BM25 retrieval on curated documents."""
+
+    def test_real_retriever_bangla_query(self):
+        """Test that BM25 retrieves relevant passages for Bangla queries."""
+        from banglarag_eval.pipeline.questions import CURATED_BANGLA_DOCUMENTS
+        from banglarag_eval.pipeline.sources import SourceDocument
+
+        docs = [
+            SourceDocument(
+                document_id=d["document_id"],
+                text=d["text"],
+                language="bn",
+                source_collection="local_curated",
+                license="local_authored",
+            )
+            for d in CURATED_BANGLA_DOCUMENTS
+        ]
+        retriever = LexicalRetriever()
+        retriever.index(docs)
+
+        result = retriever.retrieve("বাংলাদেশের রাজধানী কোথায়?", top_k=3)
+        assert len(result.documents) > 0
+        assert result.documents[0].score > 0
+        # Top result should be about Dhaka/Bangladesh capital
+        top_text = result.documents[0].text
+        assert "ঢাকা" in top_text or "রাজধানী" in top_text
+
+    def test_real_retriever_english_query(self):
+        """Test BM25 with English queries on English documents."""
+        from banglarag_eval.pipeline.questions import ENGLISH_BASELINE_DOCUMENTS
+        from banglarag_eval.pipeline.sources import SourceDocument
+
+        docs = [
+            SourceDocument(
+                document_id=d["document_id"],
+                text=d["text"],
+                language="en",
+                source_collection="local_curated",
+                license="local_authored",
+            )
+            for d in ENGLISH_BASELINE_DOCUMENTS
+        ]
+        retriever = LexicalRetriever()
+        retriever.index(docs)
+
+        result = retriever.retrieve("What is the capital of Bangladesh?", top_k=2)
+        assert len(result.documents) > 0
+        assert result.documents[0].score > 0
+
+    def test_real_retriever_scores_ranked(self):
+        """Test that BM25 scores are properly ranked (descending)."""
+        from banglarag_eval.pipeline.questions import CURATED_BANGLA_DOCUMENTS
+        from banglarag_eval.pipeline.sources import SourceDocument
+
+        docs = [
+            SourceDocument(
+                document_id=d["document_id"],
+                text=d["text"],
+                language="bn",
+                source_collection="local_curated",
+                license="local_authored",
+            )
+            for d in CURATED_BANGLA_DOCUMENTS
+        ]
+        retriever = LexicalRetriever()
+        retriever.index(docs)
+
+        result = retriever.retrieve("কক্সবাজার সৈকত", top_k=5)
+        scores = [doc.score for doc in result.documents]
+        assert scores == sorted(scores, reverse=True)
+
+
+@pytest.mark.real
+@pytestmark_ollama
+class TestRealPipelineEndToEnd:
+    """Test the real pipeline end-to-end with live Ollama."""
+
+    def test_real_pipeline_small_subset(self):
+        """Run the real pipeline on a small subset (2 records)."""
+        records = build_pilot_records(
+            language_conditions=["native_bangla"],
+            evidence_conditions=["correct"],
+            use_ollama=True,
+        )
+        assert len(records) > 0
+        for record in records:
+            # Real generation should produce non-empty answers
+            assert record["generated_answer"]
+            assert len(record["generated_answer"]) > 0
+            # Model should be qwen3:8b (or fallback)
+            assert record["generator_model"] in (
+                "qwen3:8b",
+                "ollama_fallback_timeouterror",
+                "ollama_unavailable_fallback",
+            )
+            # No gold labels
+            assert record["faithfulness_category"] is None
+            assert record["annotations"] == []
+
+    def test_real_pipeline_record_schema_valid(self):
+        """Test that real pipeline records pass schema validation."""
+        from banglarag_eval.schema import validate_record
+
+        records = build_pilot_records(
+            language_conditions=["native_bangla"],
+            evidence_conditions=["correct"],
+            use_ollama=True,
+        )
+        for record in records:
+            result = validate_record(record)
+            assert result.is_valid, f"Schema validation failed: {result.errors}"
+
+    def test_real_pipeline_bangla_answer_contains_bangla(self):
+        """Test that Bangla questions get Bangla answers from Qwen3."""
+        records = build_pilot_records(
+            language_conditions=["native_bangla"],
+            evidence_conditions=["correct"],
+            use_ollama=True,
+        )
+        bangla_records = [
+            r for r in records
+            if r["language_condition"] == "native_bangla"
+            and r["generator_model"] == "qwen3:8b"
+        ]
+        if bangla_records:
+            # At least some answers should contain Bangla characters
+            has_bangla = any(
+                any(ord(c) > 0x0980 for c in r["generated_answer"])
+                for r in bangla_records
+            )
+            assert has_bangla, "No Bangla characters found in any generated answer"
+
+
+# ── Real dataset validation tests ──────────────────────────────────
+# These tests validate the actual generated pilot_stage1_real.jsonl
+# if it exists. Skipped if the file is not present.
+
+PILOT_DATASET = Path(__file__).parent.parent / "data" / "pilot_stage1_real.jsonl"
+
+pytestmark_dataset = pytest.mark.skipif(
+    not PILOT_DATASET.exists(),
+    reason=f"Pilot dataset not found at {PILOT_DATASET} — run: python scripts/run_pipeline.py",
+)
+
+
+@pytest.mark.real
+@pytestmark_dataset
+class TestRealDatasetValidation:
+    """Validate the real generated pilot dataset."""
+
+    @classmethod
+    def load_records(cls):
+        """Load the real pilot dataset."""
+        with open(PILOT_DATASET, encoding="utf-8") as f:
+            return [json.loads(line) for line in f]
+
+    @pytest.fixture(scope="class")
+    def records(self):
+        """Load the real pilot dataset once for all tests."""
+        return self.load_records()
+
+    def test_dataset_has_500_records(self, records):
+        """Dataset should have exactly 500 records."""
+        assert len(records) == 500, f"Expected 500 records, got {len(records)}"
+
+    def test_dataset_all_records_valid(self, records):
+        """All records should pass schema validation."""
+        from banglarag_eval.schema import validate_record
+        errors = []
+        for record in records:
+            result = validate_record(record)
+            if not result.is_valid:
+                errors.append(f"{record['example_id']}: {result.errors}")
+        assert not errors, f"{len(errors)} records failed validation:\n" + "\n".join(errors[:5])
+
+    def test_dataset_language_distribution(self, records):
+        """Language distribution should match expected counts."""
+        from collections import Counter
+        lang = Counter(r["language_condition"] for r in records)
+        assert lang["native_bangla"] == 120
+        assert lang["translated_bangla"] == 120
+        assert lang["code_mixed"] == 120
+        assert lang["banglish"] == 120
+        assert lang["english"] == 20
+
+    def test_dataset_evidence_distribution(self, records):
+        """Evidence distribution should be 100 per condition."""
+        from collections import Counter
+        evidence = Counter(r["evidence_condition"] for r in records)
+        assert evidence["correct"] == 100
+        assert evidence["partially_relevant"] == 100
+        assert evidence["irrelevant"] == 100
+        assert evidence["contradictory"] == 100
+        assert evidence["missing"] == 100
+
+    def test_dataset_no_faithfulness_categorys(self, records):
+        """No records should have gold labels (humans must annotate)."""
+        gold_count = sum(1 for r in records if r["faithfulness_category"] is not None)
+        assert gold_count == 0, f"{gold_count} records have gold labels (should be 0)"
+
+    def test_dataset_no_annotations(self, records):
+        """No records should have annotations yet."""
+        annot_count = sum(1 for r in records if r["annotations"])
+        assert annot_count == 0, f"{annot_count} records have annotations (should be 0)"
+
+    def test_dataset_all_have_generated_answers(self, records):
+        """Every record should have a non-empty generated_answer."""
+        empty = [r["example_id"] for r in records if not r["generated_answer"]]
+        assert not empty, f"{len(empty)} records have empty generated_answer"
+
+    def test_dataset_all_have_generation_metadata(self, records):
+        """Every record should have generation metadata."""
+        missing = [
+            r["example_id"] for r in records
+            if not r.get("generator_model")
+        ]
+        assert not missing, f"{len(missing)} records missing generation metadata"
+
+    def test_dataset_models_used(self, records):
+        """Check which models were used for generation."""
+        from collections import Counter
+        models = Counter(r["generator_model"] for r in records)
+        # Most should be qwen3:8b
+        assert models["qwen3:8b"] >= 490, f"Only {models.get('qwen3:8b', 0)} records used qwen3:8b"
+        # Print summary for visibility
+        print(f"\nModels used: {dict(models)}")
+
+    def test_dataset_bangla_unicode_preserved(self, records):
+        """Bangla records should preserve Bangla Unicode in source text."""
+        bangla_records = [
+            r for r in records
+            if r["language_condition"] == "native_bangla"
+        ]
+        for record in bangla_records:
+            assert any(
+                ord(c) > 0x0980 for c in record["source_text"]
+            ), f"{record['example_id']}: no Bangla in source_text"
+
+    def test_dataset_example_ids_unique(self, records):
+        """All record IDs should be unique."""
+        ids = [r["example_id"] for r in records]
+        assert len(ids) == len(set(ids)), f"{len(ids) - len(set(ids))} duplicate IDs"
+
+    def test_dataset_example_ids_follow_pattern(self, records):
+        """Record IDs should follow the pilot1-LANG-EVID-INDEX pattern."""
+        import re
+        pattern = re.compile(r"^pilot1-[a-z]{3,4}-[a-z_]+-\d{4}$")
+        bad_ids = [r["example_id"] for r in records if not pattern.match(r["example_id"])]
+        # Allow some flexibility in the pattern
+        assert len(bad_ids) <= 5, f"{len(bad_ids)} record IDs don't match pattern: {bad_ids[:3]}"
+
+    def test_dataset_evidence_condition_distribution_per_language(self, records):
+        """Each language condition should have records across all evidence conditions."""
+        from collections import Counter
+        for lang in ["native_bangla", "translated_bangla", "code_mixed", "banglish"]:
+            lang_records = [r for r in records if r["language_condition"] == lang]
+            evidence_dist = Counter(r["evidence_condition"] for r in lang_records)
+            for cond in ["correct", "partially_relevant", "irrelevant", "contradictory", "missing"]:
+                assert cond in evidence_dist, f"{lang}: missing evidence condition {cond}"
+                assert evidence_dist[cond] == 24, \
+                    f"{lang}/{cond}: expected 24, got {evidence_dist[cond]}"
+
+    def test_dataset_corruption_metadata_present(self, records):
+        """Corrupted evidence records should have corruption_metadata."""
+        corrupted = [
+            r for r in records
+            if r["evidence_condition"] in ("irrelevant", "contradictory")
+        ]
+        for record in corrupted:
+            assert record.get("corruption_metadata"), \
+                f"{record['example_id']}: missing corruption_metadata"
+
+    def test_dataset_correct_evidence_no_corruption(self, records):
+        """Correct evidence records should not have corruption_metadata."""
+        correct = [
+            r for r in records
+            if r["evidence_condition"] == "correct"
+        ]
+        for record in correct:
+            assert not record.get("corruption_metadata"), \
+                f"{record['example_id']}: should not have corruption_metadata"
+
+    def test_dataset_missing_evidence_empty_context(self, records):
+        """Missing evidence records should have empty retrieved_context."""
+        missing = [
+            r for r in records
+            if r["evidence_condition"] == "missing"
+        ]
+        for record in missing:
+            assert record.get("retrieved_context", "") == "", \
+                f"{record['example_id']}: missing evidence should have empty context"
+
+    def test_dataset_sample_answers_quality(self, records):
+        """Spot-check a few answers for basic quality."""
+        # Find a native_bangla/correct record
+        for r in records:
+            if (r["language_condition"] == "native_bangla"
+                    and r["evidence_condition"] == "correct"
+                    and r["generator_model"] == "qwen3:8b"):
+                # Answer should be non-trivial (more than 2 characters)
+                assert len(r["generated_answer"]) > 2, \
+                    f"{r['example_id']}: answer too short: '{r['generated_answer']}'"
+                break
+
+    def test_dataset_timestamps_valid(self, records):
+        """All timestamps should be valid ISO-8601."""
+        from datetime import datetime
+        for record in records:
+            ts = record.get("timestamp")
+            assert ts, f"{record.get('example_id', 'unknown')}: missing timestamp"
+            try:
+                datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            except ValueError:
+                pytest.fail(f"{record['example_id']}: invalid timestamp '{ts}'")
