@@ -40,6 +40,11 @@ data/raw/
 data/private/
 data/intermediate/
 
+# Pipeline-generated pilot datasets (regenerate with scripts/run_pipeline.py)
+data/pilot_stage1_real.jsonl
+data/pilot_stage1_annotated_v0.jsonl
+data/pilot_*.jsonl
+
 # Generated experiment outputs
 outputs/
 results/

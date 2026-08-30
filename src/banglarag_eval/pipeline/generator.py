@@ -132,7 +132,16 @@ def generate(
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = json.loads(resp.read().decode("utf-8"))
+    except TimeoutError as exc:
+        raise TimeoutError(
+            f"Ollama generation timed out after {timeout}s. "
+            f"The model may be thinking too long. Consider using /no_think. Error: {exc}"
+        ) from exc
     except urllib.error.URLError as exc:
+        if "timed out" in str(exc).lower():
+            raise TimeoutError(
+                f"Ollama generation timed out after {timeout}s. Error: {exc}"
+            ) from exc
         raise ConnectionError(
             f"Cannot connect to Ollama at {base_url}. "
             f"Is it running? Start with: ollama serve. Error: {exc}"

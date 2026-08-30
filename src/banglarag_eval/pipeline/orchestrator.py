@@ -96,6 +96,10 @@ def build_pilot_records(
     # 5. Build records
     records: list[dict[str, Any]] = []
     record_index = 0
+    total_expected = len(questions) * len(evidence_conditions)
+
+    print(f"[INFO] Generating {total_expected} records "
+          f"({len(questions)} questions x {len(evidence_conditions)} evidence conditions)")
 
     for q_spec in questions:
         # Find the source document for this question
@@ -122,14 +126,16 @@ def build_pilot_records(
                         question=q_spec.question,
                         context=evidence.retrieved_context,
                         temperature=0.0,
+                        timeout=300,
                     )
                     generated_answer = gen_result.answer
                     generation_model = gen_result.model
                     generation_latency = gen_result.latency_seconds
                     generation_tokens = gen_result.eval_count
-                except (ConnectionError, RuntimeError):
+                except (ConnectionError, RuntimeError, TimeoutError) as exc:
+                    print(f"  [WARN] Record {record_index}: generation failed ({type(exc).__name__}), using fallback")
                     generated_answer = q_spec.intended_answer
-                    generation_model = "ollama_unavailable_fallback"
+                    generation_model = f"ollama_fallback_{type(exc).__name__.lower()}"
                     generation_latency = 0.0
                     generation_tokens = 0
             elif ollama_available and not evidence.retrieved_context:
@@ -139,14 +145,16 @@ def build_pilot_records(
                         question=q_spec.question,
                         context="(no context provided)",
                         temperature=0.0,
+                        timeout=300,
                     )
                     generated_answer = gen_result.answer
                     generation_model = gen_result.model
                     generation_latency = gen_result.latency_seconds
                     generation_tokens = gen_result.eval_count
-                except (ConnectionError, RuntimeError):
+                except (ConnectionError, RuntimeError, TimeoutError) as exc:
+                    print(f"  [WARN] Record {record_index}: generation failed ({type(exc).__name__}), using fallback")
                     generated_answer = q_spec.intended_answer
-                    generation_model = "ollama_unavailable_fallback"
+                    generation_model = f"ollama_fallback_{type(exc).__name__.lower()}"
                     generation_latency = 0.0
                     generation_tokens = 0
             else:
@@ -204,6 +212,11 @@ def build_pilot_records(
 
             records.append(record)
             record_index += 1
+
+            if record_index % 10 == 0:
+                print(f"  [{record_index}/{total_expected}] "
+                      f"{q_spec.language_condition}/{evidence_condition} "
+                      f"({generation_latency}s)")
 
     return records
 
