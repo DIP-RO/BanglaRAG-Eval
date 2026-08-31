@@ -17,9 +17,10 @@ are **never** gold, under any configuration:
 Automatic evaluators are the *objects of study*: the benchmark measures how
 well they recover human judgments across language and evidence conditions.
 
-## Evaluator abstraction (Milestone 2 implementation target)
+## Evaluator abstraction (implemented — Issue #11)
 
-Every evaluator implements a common interface:
+Every evaluator implements a common interface defined in
+`src/banglarag_eval/evaluators/base.py`:
 
 ```text
 Evaluator
@@ -35,11 +36,25 @@ Evaluator
 
 Outputs append to the record's `evaluator_outputs` array — never to the
 annotation fields. Evaluators must not see human labels at inference time.
-Planned adapters (implemented only when dependencies/API access exist —
-abstraction first): RAGAS faithfulness, independent LLM judges (cross-model to
-limit self-preference), ARES where technically feasible, an encoder detector,
-and a lexical baseline. SemFuse integrates, if at all, behind a separate
-`RAGBackend` interface (retrieval/generation infrastructure only).
+
+### Implemented evaluators
+
+| Evaluator | File | API needed | Status |
+|---|---|---|---|
+| LexicalBaselineEvaluator | `evaluators/lexical_baseline.py` | No | Complete |
+| LLMJudgeEvaluator | `evaluators/llm_judge.py` | Ollama (local) | Complete |
+| RAGAS faithfulness | — | LLM API | Planned |
+| ARES | — | LLM API + embeddings | Planned |
+| Encoder detector | — | Model download | Planned |
+
+The LLM judge uses a different model from the generator (cross-model)
+to limit self-preference (circularity control). The judge model is
+configured via `JUDGE_MODEL` environment variable.
+
+Planned adapters (implemented only when dependencies/API access exist):
+RAGAS faithfulness, ARES where technically feasible, an encoder detector.
+SemFuse integrates, if at all, behind a separate `RAGBackend` interface
+(retrieval/generation infrastructure only).
 
 ## Metrics
 
@@ -87,13 +102,13 @@ if the pilot demonstrates sufficient annotation reliability at the span
 level. No token-level results are reported without the underlying human
 span annotations.
 
-### Ranking stability
+### Ranking stability (implemented — Issue #14)
 
-Framework requirement (Milestone 2+): given multiple generators/systems or
-conditions, compare the *rankings* each evaluator induces — rank correlation
-(Spearman/Kendall) between evaluator-induced rankings and human-induced
-rankings, and cross-evaluator ranking agreement. Pilot scale permits only the
-mechanism to be exercised, not conclusions.
+Framework in `src/banglarag_eval/metrics/ranking.py`: given multiple
+generators/systems or conditions, compares the *rankings* each evaluator
+induces — rank correlation (Spearman/Kendall) between evaluator-induced
+rankings and human-induced rankings, and cross-evaluator ranking agreement.
+Pilot scale permits only the mechanism to be exercised, not conclusions.
 
 ### Efficiency
 
@@ -101,10 +116,11 @@ Measured, never estimated: wall-clock latency per example, cost per example
 (API pricing at run time, recorded in the run config), examples/second for
 local models. **Values that were not actually measured are not reported.**
 
-## Statistical testing
+## Statistical testing (implemented — Issue #13)
 
-Configurable analysis module (Milestone 2+). Planned tests, each applied only
-where its assumptions hold, with the rationale recorded in the run config:
+Configurable analysis module in `src/banglarag_eval/metrics/statistics.py`.
+Implemented tests, each applied only where its assumptions hold, with the
+rationale recorded in the run config:
 
 | Comparison | Test | Why appropriate |
 |---|---|---|
