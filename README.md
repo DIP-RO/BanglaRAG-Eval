@@ -69,6 +69,15 @@ graph TB
         RANKMOD["ranking.py<br/>Ranking stability (Spearman/Kendall)"]
     end
 
+    subgraph Gates["Stage 1 Gates (src/banglarag_eval/gates.py)"]
+        GATESMOD["gates.py<br/>5 gates: kappa, NO-FIT,<br/>condition, pipeline, evaluator"]
+    end
+
+    subgraph RAGBackend["RAG Backend (src/banglarag_eval/rag_backend/)"]
+        BACKENDBASE["base.py<br/>RAGBackend ABC + stub"]
+        SEMFUSE["SemFuse stub<br/>(future integration)"]
+    end
+
     subgraph Annotation["Annotation UI (src/banglarag_eval/annotation/)"]
         STORE["store.py<br/>JSONL annotation store"]
         FLASKAPP["app.py<br/>Flask web server"]
@@ -81,11 +90,12 @@ graph TB
         ANNOTATED["data/pilot_stage1_annotated_v0.jsonl<br/>(after human annotation)"]
     end
 
-    subgraph Tests["Test Suite (tests/) — 313 tests"]
+    subgraph Tests["Test Suite (tests/) — 345 tests"]
         TESTSCHEMA["test_schema_validation.py"]
         TESTANNOT["test_annotation.py"]
         TESTPIPE["test_pipeline.py<br/>69 pipeline + 29 real tests"]
         TESTEVAL["test_evaluators.py<br/>73 evaluator/metrics tests"]
+        TESTGATES["test_gates_and_backend.py<br/>32 gate/backend tests"]
         TESTEDGE["test_edge_cases.py<br/>41 edge-case tests"]
         TESTOTHER["test_config, test_sampling,<br/>test_dataset, test_conditions,<br/>test_end_to_end"]
     end
@@ -412,7 +422,7 @@ flowchart TB
 
 | Component | Status |
 |---|---|
-| Schema and validation (R1–R10) | Complete — 313 tests passing |
+| Schema and validation (R1–R10) | Complete — 345 tests passing |
 | Annotation UI | Complete — Flask web app with login, annotate, adjudicate |
 | Source document interface | Complete — 8 Bangla + 2 English curated documents |
 | Question generation | Complete — 100 questions across 5 language conditions |
@@ -424,9 +434,11 @@ flowchart TB
 | Metrics module | **Complete — P/R/F1, AUROC, kappa, correlation, efficiency (Issue #12)** |
 | Statistical analysis | **Complete — Bootstrap, McNemar, Holm correction (Issue #13)** |
 | Ranking stability | **Complete — Spearman/Kendall ranking comparison (Issue #14)** |
-| Human annotation | Not started — needs 2 independent annotators |
-| Stage 1 gates | Not measured — needs annotation first |
-| Run evaluators on pilot | Not started — needs annotation for comparison |
+| RAGBackend interface | **Complete — RAGBackend ABC + StubRAGBackend + SemFuseRAGBackend stub (Issue #15)** |
+| Stage 1 gate measurement | **Complete — gates.py measures all 5 gates (Issue #10)** |
+| Evaluator harness | **Complete — 500/500 lexical baseline outputs on pilot dataset** |
+| Human annotation | Not started — needs 2 independent annotators (Issue #9) |
+| Stage 1 gates (annotation) | 3/5 pass — condition integrity, pipeline integrity, evaluator harness pass; annotation agreement + taxonomy need human annotators |
 
 ### Pilot dataset statistics (generated 2026-08-30)
 
@@ -773,10 +785,12 @@ BanglaRAG-Eval/
 │   ├── annotation_guidelines.md
 │   └── evaluation_protocol.md
 ├── experiments/        # experiment definitions (Milestone 2+)
-├── scripts/            # fixture builder, annotation server, pipeline runner
+├── scripts/            # fixture builder, annotation, pipeline, evaluator runners
 │   ├── build_synthetic_fixture.py
 │   ├── run_annotation_server.py
 │   ├── run_pipeline.py                 # Milestone 2 pipeline runner
+│   ├── run_evaluators.py               # Run evaluators + compute metrics
+│   ├── setup_annotation.py             # Create annotation working copy
 │   └── migrate_schema.py               # Schema migration (nested -> flat)
 ├── src/                # banglarag_eval package
 │   └── banglarag_eval/
@@ -804,14 +818,18 @@ BanglaRAG-Eval/
 │       │   ├── metrics.py         # P/R/F1, AUROC, kappa, correlation, efficiency
 │       │   ├── statistics.py      # Bootstrap, McNemar, Holm correction
 │       │   └── ranking.py         # Ranking stability (Spearman/Kendall)
+│       ├── rag_backend/ # RAG infrastructure interface (Issue #15)
+│       │   ├── __init__.py
+│       │   └── base.py            # RAGBackend ABC + Stub + SemFuse stub
 │       ├── __init__.py
 │       ├── config.py   # pilot config loading + validation
 │       ├── constants.py# canonical condition vocabularies
 │       ├── dataset.py  # JSONL load/save with validation
 │       ├── fixtures.py # 10-example synthetic fixture builder
+│       ├── gates.py    # Stage 1 gate measurement (Issue #10)
 │       ├── sampling.py # deterministic condition-cell allocation
 │       └── schema.py   # record schema + 10 cross-field validation rules
-└── tests/              # 313 tests
+└── tests/              # 345 tests
     ├── conftest.py
     ├── test_schema_validation.py    # 46 tests — schema rules R1–R10
     ├── test_conditions.py           # 16 tests — condition vocabularies
@@ -822,7 +840,8 @@ BanglaRAG-Eval/
     ├── test_annotation.py           # 33 tests — annotation store + Flask UI
     ├── test_edge_cases.py           # 41 tests — edge cases across all modules
     ├── test_pipeline.py             # 98 tests — pipeline + real integration
-    └── test_evaluators.py           # 73 tests — evaluators, metrics, stats, ranking
+    ├── test_evaluators.py           # 73 tests — evaluators, metrics, stats, ranking
+    └── test_gates_and_backend.py    # 32 tests — Stage 1 gates + RAGBackend
 ```
 
 ---
@@ -841,11 +860,11 @@ The complete roadmap is tracked in [GitHub Issues](https://github.com/shohel1arm
 | #7 | Evidence Construction + Corruption | M2 | Implemented |
 | #8 | Build Real 30–50 Example Pilot Dataset | M2 | Implemented (500 records) |
 | #9 | Run Two Independent Annotators + Adjudication | M2 | Open |
-| #10 | Measure Stage 1 Gates | M2 | Open |
+| #10 | Measure Stage 1 Gates | M2 | Implemented (3/5 pass, 2 need annotation) |
 | #11 | Evaluator Framework | M2 | Implemented |
 | #12 | Metrics Module | M2 | Implemented |
 | #13 | Statistical Analysis Module | M2 | Implemented |
 | #14 | Ranking Stability Framework | M2 | Implemented |
-| #15 | SemFuse RAGBackend Interface | M2 | Open |
+| #15 | SemFuse RAGBackend Interface | M2 | Implemented (stub) |
 | #16 | Scale to 300–500 Examples | M3 | Open |
 | #17 | Full Experiment Campaign + ICLR 2027 Paper | M3 | Open |
