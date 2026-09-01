@@ -54,6 +54,18 @@ def build_evaluator(name: str, **kwargs):
         return LexicalBaselineEvaluator()
     elif name == "llm_judge":
         return LLMJudgeEvaluator()
+    elif name == "ragas_faithfulness":
+        from banglarag_eval.evaluators import RAGASFaithfulnessEvaluator
+        return RAGASFaithfulnessEvaluator()
+    elif name == "nli_entailment":
+        from banglarag_eval.evaluators import NLIEvaluator
+        return NLIEvaluator()
+    elif name == "answer_relevance":
+        from banglarag_eval.evaluators import AnswerRelevanceEvaluator
+        return AnswerRelevanceEvaluator()
+    elif name == "exact_match":
+        from banglarag_eval.evaluators import ExactMatchEvaluator
+        return ExactMatchEvaluator()
     else:
         raise ValueError(f"Unknown evaluator: {name}")
 

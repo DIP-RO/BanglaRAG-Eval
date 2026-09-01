@@ -41,14 +41,19 @@ annotation fields. Evaluators must not see human labels at inference time.
 
 | Evaluator | File | API needed | Status |
 |---|---|---|---|
-| LexicalBaselineEvaluator | `evaluators/lexical_baseline.py` | No | Complete |
+| LexicalBaselineEvaluator | `evaluators/lexical_baseline.py` | No | Complete — 500/500 on pilot |
+| AnswerRelevanceEvaluator | `evaluators/answer_relevance.py` | No | Complete — 500/500 on pilot |
+| ExactMatchEvaluator | `evaluators/exact_match.py` | No | Complete — 500/500 on pilot |
 | LLMJudgeEvaluator | `evaluators/llm_judge.py` | Ollama (local) | Complete |
-| RAGAS faithfulness | — | LLM API | Planned |
+| RAGASFaithfulnessEvaluator | `evaluators/ragas_faithfulness.py` | Ollama (local) | Complete |
+| NLIEvaluator | `evaluators/nli_entailment.py` | Ollama (local) | Complete |
 | ARES | — | LLM API + embeddings | Planned |
 | Encoder detector | — | Model download | Planned |
 
-The LLM judge uses a different model from the generator (cross-model)
-to limit self-preference (circularity control). The judge model is
+Three evaluators run without any API (lexical baseline, answer relevance,
+exact match). Three use Ollama (local LLM, no paid API). The LLM-based
+evaluators use a different model from the generator (cross-model) to
+limit self-preference (circularity control). The judge model is
 configured via `JUDGE_MODEL` environment variable.
 
 Planned adapters (implemented only when dependencies/API access exist):

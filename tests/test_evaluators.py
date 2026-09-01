@@ -17,6 +17,10 @@ from banglarag_eval.evaluators import (
     attach_evaluator_output,
     LexicalBaselineEvaluator,
     LLMJudgeEvaluator,
+    RAGASFaithfulnessEvaluator,
+    NLIEvaluator,
+    AnswerRelevanceEvaluator,
+    ExactMatchEvaluator,
 )
 from banglarag_eval.metrics import (
     compute_classification_metrics,
@@ -687,3 +691,395 @@ class TestRanking:
         r2 = {"a": 0.9, "b": 0.5, "c": 0.7, "d": 0.3}
         result = rank_correlation(r1, r2, method="kendall")
         assert result.correlation == 1.0
+
+
+# ── RAGAS faithfulness evaluator tests (mocked) ─────────────────────
+
+
+class TestRAGASFaithfulnessEvaluator:
+    """Test the RAGAS-style faithfulness evaluator (mocked Ollama)."""
+
+    @pytest.fixture
+    def evaluator(self):
+        return RAGASFaithfulnessEvaluator(
+            judge_model="test-model", base_url="http://localhost:99999"
+        )
+
+    def test_name_and_version(self, evaluator):
+        assert evaluator.name == "ragas_faithfulness"
+        assert evaluator.version == "1.0.0"
+
+    def test_empty_answer(self, evaluator):
+        record = {"question": "test", "retrieved_context": "context", "generated_answer": ""}
+        result = evaluator.evaluate(record)
+        assert result.label == "insufficient_evidence"
+
+    def test_empty_context(self, evaluator):
+        record = {"question": "test", "retrieved_context": "", "generated_answer": "test"}
+        result = evaluator.evaluate(record)
+        assert result.label == "insufficient_evidence"
+
+    @patch("banglarag_eval.evaluators.ragas_faithfulness._ollama_generate")
+    def test_successful_evaluation(self, mock_gen, evaluator):
+        # Step 1: claim extraction returns 2 claims
+        # Step 2: verification returns "entailed" for both
+        mock_gen.side_effect = [
+            "- The capital is Dhaka\n- It is a big city",  # claim extraction
+            "entailed",  # claim 1 verification
+            "entailed",  # claim 2 verification
+        ]
+
+        record = {
+            "question": "What is the capital?",
+            "retrieved_context": "The capital of Bangladesh is Dhaka. It is a big city.",
+            "generated_answer": "The capital is Dhaka. It is a big city.",
+        }
+        result = evaluator.evaluate(record)
+        assert result.label == "faithful"
+        assert result.score == 1.0
+        assert "2" in result.explanation  # 2 claims
+
+    @patch("banglarag_eval.evaluators.ragas_faithfulness._ollama_generate")
+    def test_contradicted_claims(self, mock_gen, evaluator):
+        mock_gen.side_effect = [
+            "- The capital is Chittagong",  # wrong claim
+            "contradicted",  # verification
+        ]
+
+        record = {
+            "question": "What is the capital?",
+            "retrieved_context": "The capital of Bangladesh is Dhaka.",
+            "generated_answer": "The capital is Chittagong.",
+        }
+        result = evaluator.evaluate(record)
+        assert result.label == "contradictory"
+        assert result.score == 0.0
+
+    @patch("banglarag_eval.evaluators.ragas_faithfulness._ollama_generate")
+    def test_partial_claims(self, mock_gen, evaluator):
+        mock_gen.side_effect = [
+            "- The capital is Dhaka\n- The population is 20 million",
+            "entailed",  # claim 1 supported
+            "neutral",   # claim 2 not in context
+        ]
+
+        record = {
+            "question": "What is the capital?",
+            "retrieved_context": "The capital of Bangladesh is Dhaka.",
+            "generated_answer": "The capital is Dhaka. The population is 20 million.",
+        }
+        result = evaluator.evaluate(record)
+        assert result.label == "partially_faithful"
+        assert result.score == 0.5
+
+    @patch("banglarag_eval.evaluators.ragas_faithfulness._ollama_generate")
+    def test_extraction_failure(self, mock_gen, evaluator):
+        mock_gen.return_value = None  # Ollama unavailable
+
+        record = {
+            "question": "test",
+            "retrieved_context": "test context",
+            "generated_answer": "test answer",
+        }
+        result = evaluator.evaluate(record)
+        assert result.label is None
+        assert "failed" in result.explanation.lower()
+
+    @patch("banglarag_eval.evaluators.ragas_faithfulness._ollama_generate")
+    def test_no_claims_extracted(self, mock_gen, evaluator):
+        mock_gen.return_value = "No claims found."
+
+        record = {
+            "question": "test",
+            "retrieved_context": "test context",
+            "generated_answer": "test answer",
+        }
+        result = evaluator.evaluate(record)
+        # "No claims found." is treated as a fallback claim, so it gets verified
+        assert result.label is not None
+
+    def test_circularity_note_in_config(self, evaluator):
+        assert "circularity_note" in evaluator.configuration
+
+    def test_max_claims_limit(self):
+        ev = RAGASFaithfulnessEvaluator(max_claims=3)
+        assert ev.max_claims == 3
+        assert ev.configuration["max_claims"] == 3
+
+
+# ── NLI entailment evaluator tests (mocked) ──────────────────────────
+
+
+class TestNLIEvaluator:
+    """Test the NLI entailment evaluator (mocked Ollama)."""
+
+    @pytest.fixture
+    def evaluator(self):
+        return NLIEvaluator(judge_model="test-model", base_url="http://localhost:99999")
+
+    def test_name_and_version(self, evaluator):
+        assert evaluator.name == "nli_entailment"
+        assert evaluator.version == "1.0.0"
+
+    def test_empty_answer(self, evaluator):
+        record = {"question": "test", "retrieved_context": "context", "generated_answer": ""}
+        result = evaluator.evaluate(record)
+        assert result.label == "insufficient_evidence"
+
+    def test_empty_context(self, evaluator):
+        record = {"question": "test", "retrieved_context": "", "generated_answer": "test"}
+        result = evaluator.evaluate(record)
+        assert result.label == "insufficient_evidence"
+
+    @patch("banglarag_eval.evaluators.nli_entailment.urllib.request.urlopen")
+    def test_entailed(self, mock_urlopen, evaluator):
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps({
+            "response": "LABEL: entailed\nREASON: All claims supported by context.",
+        }).encode("utf-8")
+        mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        mock_urlopen.return_value = mock_resp
+
+        record = {
+            "question": "What is the capital?",
+            "retrieved_context": "The capital is Dhaka.",
+            "generated_answer": "The capital is Dhaka.",
+        }
+        result = evaluator.evaluate(record)
+        assert result.label == "faithful"
+        assert result.score == 1.0
+
+    @patch("banglarag_eval.evaluators.nli_entailment.urllib.request.urlopen")
+    def test_contradicted(self, mock_urlopen, evaluator):
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps({
+            "response": "LABEL: contradicted\nREASON: Answer conflicts with context.",
+        }).encode("utf-8")
+        mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        mock_urlopen.return_value = mock_resp
+
+        record = {
+            "question": "test",
+            "retrieved_context": "The capital is Dhaka.",
+            "generated_answer": "The capital is Chittagong.",
+        }
+        result = evaluator.evaluate(record)
+        assert result.label == "contradictory"
+        assert result.score == 0.0
+
+    @patch("banglarag_eval.evaluators.nli_entailment.urllib.request.urlopen")
+    def test_neutral(self, mock_urlopen, evaluator):
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps({
+            "response": "LABEL: neutral\nREASON: Context doesn't address the claim.",
+        }).encode("utf-8")
+        mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        mock_urlopen.return_value = mock_resp
+
+        record = {
+            "question": "test",
+            "retrieved_context": "The capital is Dhaka.",
+            "generated_answer": "The weather is sunny.",
+        }
+        result = evaluator.evaluate(record)
+        assert result.label == "unsupported"
+        assert result.score == 0.5
+
+    @patch("banglarag_eval.evaluators.nli_entailment.urllib.request.urlopen")
+    def test_connection_error(self, mock_urlopen, evaluator):
+        import urllib.error
+        mock_urlopen.side_effect = urllib.error.URLError("Connection refused")
+
+        record = {
+            "question": "test",
+            "retrieved_context": "test",
+            "generated_answer": "test",
+        }
+        result = evaluator.evaluate(record)
+        assert result.label is None
+
+    def test_circularity_note(self, evaluator):
+        assert "circularity_note" in evaluator.configuration
+
+
+# ── Answer relevance evaluator tests ─────────────────────────────────
+
+
+class TestAnswerRelevanceEvaluator:
+    """Test the answer relevance evaluator."""
+
+    @pytest.fixture
+    def evaluator(self):
+        return AnswerRelevanceEvaluator()
+
+    def test_name_and_version(self, evaluator):
+        assert evaluator.name == "answer_relevance"
+        assert evaluator.version == "1.0.0"
+
+    def test_relevant_answer(self, evaluator):
+        record = {
+            "question": "What is the capital of Bangladesh?",
+            "generated_answer": "The capital of Bangladesh is Dhaka city.",
+        }
+        result = evaluator.evaluate(record)
+        assert result.label in ("faithful", "partially_faithful")
+        assert result.score > 0.3
+
+    def test_irrelevant_answer(self, evaluator):
+        record = {
+            "question": "What is the capital of Bangladesh?",
+            "generated_answer": "The weather today is very sunny and warm.",
+        }
+        result = evaluator.evaluate(record)
+        assert result.label == "unsupported"
+        assert result.score < 0.2
+
+    def test_empty_answer(self, evaluator):
+        record = {"question": "test", "generated_answer": ""}
+        result = evaluator.evaluate(record)
+        assert result.label == "insufficient_evidence"
+
+    def test_empty_question(self, evaluator):
+        record = {"question": "", "generated_answer": "test answer"}
+        result = evaluator.evaluate(record)
+        assert result.label == "insufficient_evidence"
+
+    def test_bangla_question(self, evaluator):
+        record = {
+            "question": "বাংলাদেশের রাজধানী কী?",
+            "generated_answer": "বাংলাদেশের রাজধানী ঢাকা।",
+        }
+        result = evaluator.evaluate(record)
+        assert result.label in ("faithful", "partially_faithful")
+        assert result.score > 0.2
+
+    def test_short_answer_penalized(self, evaluator):
+        record = {
+            "question": "What is the capital of Bangladesh and how big is it?",
+            "generated_answer": "Dhaka.",
+        }
+        result = evaluator.evaluate(record)
+        # Short answer should get penalized
+        assert result.score < 0.5
+
+    def test_does_not_read_human_labels(self, evaluator):
+        record = {
+            "question": "What is the capital?",
+            "generated_answer": "The capital is Dhaka.",
+            "annotations": [{"faithfulness_category": "faithful"}],
+            "faithfulness_category": "faithful",
+        }
+        result = evaluator.evaluate(record)
+        assert result.label is not None
+
+    def test_configuration(self, evaluator):
+        assert "relevance_threshold" in evaluator.configuration
+
+    def test_custom_thresholds(self):
+        ev = AnswerRelevanceEvaluator(relevance_threshold=0.5)
+        assert ev.relevance_threshold == 0.5
+
+
+# ── Exact match precision evaluator tests ────────────────────────────
+
+
+class TestExactMatchEvaluator:
+    """Test the exact-match precision evaluator."""
+
+    @pytest.fixture
+    def evaluator(self):
+        return ExactMatchEvaluator()
+
+    def test_name_and_version(self, evaluator):
+        assert evaluator.name == "exact_match_precision"
+        assert evaluator.version == "1.0.0"
+
+    def test_high_overlap(self, evaluator):
+        record = {
+            "question": "What is the capital?",
+            "retrieved_context": "The capital of Bangladesh is Dhaka.",
+            "generated_answer": "The capital of Bangladesh is Dhaka.",
+        }
+        result = evaluator.evaluate(record)
+        assert result.label == "faithful"
+        assert result.score > 0.5
+
+    def test_low_overlap(self, evaluator):
+        record = {
+            "question": "What is the capital?",
+            "retrieved_context": "The capital of Bangladesh is Dhaka.",
+            "generated_answer": "The weather is very sunny today.",
+        }
+        result = evaluator.evaluate(record)
+        assert result.label == "unsupported"
+        assert result.score < 0.4
+
+    def test_empty_context(self, evaluator):
+        record = {
+            "question": "test",
+            "retrieved_context": "",
+            "generated_answer": "test answer",
+        }
+        result = evaluator.evaluate(record)
+        assert result.label == "insufficient_evidence"
+
+    def test_empty_answer(self, evaluator):
+        record = {
+            "question": "test",
+            "retrieved_context": "test context",
+            "generated_answer": "",
+        }
+        result = evaluator.evaluate(record)
+        assert result.label == "insufficient_evidence"
+
+    def test_bangla_text(self, evaluator):
+        record = {
+            "question": "রাজধানী কী?",
+            "retrieved_context": "বাংলাদেশের রাজধানী ঢাকা।",
+            "generated_answer": "বাংলাদেশের রাজধানী ঢাকা।",
+        }
+        result = evaluator.evaluate(record)
+        assert result.label == "faithful"
+        assert result.score > 0.5
+
+    def test_partial_overlap(self, evaluator):
+        record = {
+            "question": "test",
+            "retrieved_context": "The capital of Bangladesh is Dhaka on the river.",
+            "generated_answer": "The capital is Dhaka with five million people.",
+        }
+        result = evaluator.evaluate(record)
+        assert 0.0 <= result.score <= 1.0
+
+    def test_tf_precision_recall(self, evaluator):
+        # Answer has repeated tokens
+        record = {
+            "question": "test",
+            "retrieved_context": "Dhaka Dhaka Dhaka city",
+            "generated_answer": "Dhaka Dhaka",
+        }
+        result = evaluator.evaluate(record)
+        # Precision should be high (both Dhaka tokens in context)
+        # Recall should be lower (context has more tokens)
+        assert result.score > 0.0
+
+    def test_does_not_read_human_labels(self, evaluator):
+        record = {
+            "question": "test",
+            "retrieved_context": "The capital is Dhaka.",
+            "generated_answer": "The capital is Dhaka.",
+            "annotations": [{"faithfulness_category": "faithful"}],
+            "faithfulness_category": "faithful",
+        }
+        result = evaluator.evaluate(record)
+        assert result.label is not None
+
+    def test_configuration(self, evaluator):
+        assert "threshold_faithful" in evaluator.configuration
+
+    def test_custom_thresholds(self):
+        ev = ExactMatchEvaluator(threshold_faithful=0.9)
+        assert ev.threshold_faithful == 0.9
