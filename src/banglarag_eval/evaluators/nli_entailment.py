@@ -56,12 +56,15 @@ def _parse_nli_response(response: str) -> tuple[str | None, str | None]:
     if reason_match:
         reason = reason_match.group(1).strip()
 
-    # Fallback
+    # Fallback: search for label keywords (including word stems)
     if label is None:
-        for cat in ["entailed", "contradicted", "neutral"]:
-            if cat in response.lower():
-                label = cat
-                break
+        lower_resp = response.lower()
+        if "entail" in lower_resp or "support" in lower_resp or "agree" in lower_resp:
+            label = "entailed"
+        elif "contradict" in lower_resp or "conflict" in lower_resp or "wrong" in lower_resp:
+            label = "contradicted"
+        elif "neutral" in lower_resp or "not address" in lower_resp or "not enough" in lower_resp:
+            label = "neutral"
 
     return label, reason
 

@@ -55,12 +55,37 @@ STOPWORDS = {
 
 
 def _detect_question_type(question: str) -> str:
-    """Detect the type of question (who/what/when/where/why/how/yes_no)."""
+    """Detect the type of question (who/what/when/where/why/how/yes_no).
+
+    Uses word-boundary matching to avoid false substring matches
+    (e.g., "কে" inside "কেন", "how" inside "how many").
+    Question words are checked before auxiliary verbs.
+    """
     q_lower = question.lower()
-    for qtype, indicators in QUESTION_TYPES.items():
-        for ind in indicators:
-            if ind in q_lower:
-                return qtype
+    # Priority order: specific question words before auxiliaries
+    priority_order = [
+        "how_many", "who", "what", "when", "where", "why", "how", "yes_no",
+    ]
+    for qtype in priority_order:
+        for ind in QUESTION_TYPES.get(qtype, []):
+            ind_lower = ind.lower()
+            # Use word boundary for ASCII indicators
+            if ind_lower.isascii():
+                pattern = r"\b" + re.escape(ind_lower) + r"\b"
+                if re.search(pattern, q_lower):
+                    return qtype
+            else:
+                # For Bangla, check that indicator is not part of a longer word
+                # by checking surrounding characters
+                idx = q_lower.find(ind_lower)
+                while idx >= 0:
+                    before = q_lower[idx - 1] if idx > 0 else " "
+                    after = q_lower[idx + len(ind_lower)] if idx + len(ind_lower) < len(q_lower) else " "
+                    # If surrounding chars are not Bangla letters, it's a word boundary
+                    is_bangla = lambda c: "\u0980" <= c <= "\u09FF"
+                    if not is_bangla(before) and not is_bangla(after):
+                        return qtype
+                    idx = q_lower.find(ind_lower, idx + 1)
     return "unknown"
 
 
