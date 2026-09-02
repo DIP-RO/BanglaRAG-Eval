@@ -90,12 +90,12 @@ graph TB
         ANNOTATED["data/pilot_stage1_annotated_v0.jsonl<br/>(after human annotation)"]
     end
 
-    subgraph Tests["Test Suite (tests/) — 384 tests"]
+    subgraph Tests["Test Suite (tests/) — 457 tests"]
         TESTSCHEMA["test_schema_validation.py"]
         TESTANNOT["test_annotation.py"]
         TESTPIPE["test_pipeline.py<br/>69 pipeline + 29 real tests"]
         TESTEVAL["test_evaluators.py<br/>112 evaluator/metrics tests"]
-        TESTGATES["test_gates_and_backend.py<br/>32 gate/backend tests"]
+        TESTGATES["test_gates_and_backend.py<br/>32 gate/backend + 73 extended coverage tests"]
         TESTEDGE["test_edge_cases.py<br/>41 edge-case tests"]
         TESTOTHER["test_config, test_sampling,<br/>test_dataset, test_conditions,<br/>test_end_to_end"]
     end
@@ -422,7 +422,7 @@ flowchart TB
 
 | Component | Status |
 |---|---|
-| Schema and validation (R1–R10) | Complete — 384 tests passing |
+| Schema and validation (R1–R10) | Complete — 457 tests passing |
 | Annotation UI | Complete — Flask web app with login, annotate, adjudicate |
 | Source document interface | Complete — 8 Bangla + 2 English curated documents |
 | Question generation | Complete — 100 questions across 5 language conditions |
@@ -829,7 +829,7 @@ BanglaRAG-Eval/
 │       ├── gates.py    # Stage 1 gate measurement (Issue #10)
 │       ├── sampling.py # deterministic condition-cell allocation
 │       └── schema.py   # record schema + 10 cross-field validation rules
-└── tests/              # 384 tests
+└── tests/              # 457 tests
     ├── conftest.py
     ├── test_schema_validation.py    # 46 tests — schema rules R1–R10
     ├── test_conditions.py           # 16 tests — condition vocabularies
@@ -842,6 +842,7 @@ BanglaRAG-Eval/
     ├── test_pipeline.py             # 98 tests — pipeline + real integration
     ├── test_evaluators.py           # 73 tests — evaluators, metrics, stats, ranking
     └── test_gates_and_backend.py    # 32 tests — Stage 1 gates + RAGBackend
+    └── test_extended_coverage.py    # 73 tests — negation, TF, question types, NLI, batch, errors
 ```
 
 ---
