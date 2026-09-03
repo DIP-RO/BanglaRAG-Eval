@@ -90,7 +90,7 @@ graph TB
         ANNOTATED["data/pilot_stage1_annotated_v0.jsonl<br/>(after human annotation)"]
     end
 
-    subgraph Tests["Test Suite (tests/) — 457 tests"]
+    subgraph Tests["Test Suite (tests/) — 521 tests"]
         TESTSCHEMA["test_schema_validation.py"]
         TESTANNOT["test_annotation.py"]
         TESTPIPE["test_pipeline.py<br/>69 pipeline + 29 real tests"]
@@ -422,7 +422,7 @@ flowchart TB
 
 | Component | Status |
 |---|---|
-| Schema and validation (R1–R10) | Complete — 457 tests passing |
+| Schema and validation (R1–R10) | Complete — 521 tests passing |
 | Annotation UI | Complete — Flask web app with login, annotate, adjudicate |
 | Source document interface | Complete — 8 Bangla + 2 English curated documents |
 | Question generation | Complete — 100 questions across 5 language conditions |
@@ -750,11 +750,20 @@ the full annotation protocol, taxonomy, and decision procedure.
 
 ## Documentation
 
-- [docs/RESEARCH_PROTOCOL.md](docs/RESEARCH_PROTOCOL.md) — full research protocol
-- [docs/pilot_design.md](docs/pilot_design.md) — pilot stages, sampling, gates
-- [docs/data_schema.md](docs/data_schema.md) — record schema and validation rules
-- [docs/annotation_guidelines.md](docs/annotation_guidelines.md) — human annotation protocol
-- [docs/evaluation_protocol.md](docs/evaluation_protocol.md) — evaluators, metrics, statistics
+All documentation is organized in [`docs/`](docs/README.md) — see the [documentation index](docs/README.md) for a complete map.
+
+### For the research supervisor
+- [RESEARCH_PROTOCOL.md](docs/RESEARCH_PROTOCOL.md) — full protocol: RQs, hypotheses, benchmark design, metrics, reproducibility (16 sections)
+- [pilot_design.md](docs/pilot_design.md) — two-stage pilot with Stage 1 gates (kappa, NO-FIT, condition integrity)
+- [evaluation_protocol.md](docs/evaluation_protocol.md) — evaluator framework, metrics, statistics, circularity controls
+
+### For annotators
+- [annotation_guidelines.md](docs/annotation_guidelines.md) — 5-way taxonomy, decision procedure, worked examples, language-specific notes
+
+### For developers
+- [data_schema.md](docs/data_schema.md) — canonical record schema, field definitions, validation rules R1–R10
+- [configs/schema/record.schema.json](configs/schema/record.schema.json) — JSON Schema draft 2020-12
+- [configs/conditions.yaml](configs/conditions.yaml) — language + evidence condition vocabularies
 
 ---
 
@@ -829,7 +838,7 @@ BanglaRAG-Eval/
 │       ├── gates.py    # Stage 1 gate measurement (Issue #10)
 │       ├── sampling.py # deterministic condition-cell allocation
 │       └── schema.py   # record schema + 10 cross-field validation rules
-└── tests/              # 457 tests
+└── tests/              # 521 tests
     ├── conftest.py
     ├── test_schema_validation.py    # 46 tests — schema rules R1–R10
     ├── test_conditions.py           # 16 tests — condition vocabularies
@@ -843,6 +852,7 @@ BanglaRAG-Eval/
     ├── test_evaluators.py           # 73 tests — evaluators, metrics, stats, ranking
     └── test_gates_and_backend.py    # 32 tests — Stage 1 gates + RAGBackend
     └── test_extended_coverage.py    # 73 tests — negation, TF, question types, NLI, batch, errors
+    └── test_pipeline_modules.py     # 64 tests — evidence, retriever, generator, questions, sources
 ```
 
 ---
