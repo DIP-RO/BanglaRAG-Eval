@@ -859,7 +859,7 @@ BanglaRAG-Eval/
 
 ## GitHub Issues and Milestones
 
-The complete roadmap is tracked in [GitHub Issues](https://github.com/shohel1arman/BanglaRAG-Eval/issues):
+The complete roadmap is tracked in [GitHub Issues](https://github.com/DIP-RO/BanglaRAG-Eval/issues):
 
 | Issue | Title | Milestone | Status |
 |---|---|---|---|

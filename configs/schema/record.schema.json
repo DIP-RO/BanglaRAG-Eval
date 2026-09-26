@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/shohel1arman/BanglaRAG-Eval/configs/schema/record.schema.json",
+  "$id": "https://github.com/DIP-RO/BanglaRAG-Eval/configs/schema/record.schema.json",
   "title": "BanglaRAG-Eval benchmark record",
   "description": "Canonical schema for one benchmark example. A record is created at question-construction time and progressively enriched by later pipeline stages (retrieval, generation, human annotation, adjudication, automatic evaluation). Fields that a later stage fills are nullable/empty until that stage runs. Human annotation fields are NEVER populated automatically; automatic evaluator results live exclusively in evaluator_outputs.",
   "type": "object",
