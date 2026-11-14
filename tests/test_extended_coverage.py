@@ -33,6 +33,7 @@ from banglarag_eval.metrics import (
     compute_correlation,
     compute_efficiency,
     bootstrap_ci,
+    cluster_bootstrap_ci,
     paired_bootstrap,
     mcnemar_test,
     holm_correction,
@@ -378,6 +379,16 @@ class TestStatisticsExtended:
         data = [1.0, 2.0, 3.0, 4.0, 5.0] * 10
         result = bootstrap_ci(data, n_bootstrap=1000, confidence_level=0.90, seed=42)
         assert result.confidence_level == 0.90
+
+    def test_cluster_bootstrap_resamples_underlying_questions(self):
+        result = cluster_bootstrap_ci(
+            [1.0, 1.0, 0.0, 0.0],
+            ["q1", "q1", "q2", "q2"],
+            n_bootstrap=200,
+            seed=7,
+        )
+        assert result.n_samples == 2
+        assert result.point_estimate == 0.5
 
     def test_mcnemar_all_discordant_a(self):
         """All discordant pairs favor A."""

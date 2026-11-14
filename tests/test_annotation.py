@@ -91,6 +91,21 @@ def dataset_path(tmp_path: Path) -> Path:
 # ── Store tests ─────────────────────────────────────────────────
 
 class TestAnnotationStore:
+    def test_annotation_records_support_correctness_and_response_separately(self, dataset_path: Path):
+        store = AnnotationStore(dataset_path)
+        annotation = store.add_annotation(
+            "test-000",
+            "ann-separate",
+            "faithful",
+            "Supported by the supplied context but wrong against the reference.",
+            "incorrect",
+            "answered",
+        )
+
+        assert annotation["label"] == "faithful"
+        assert annotation["correctness_label"] == "incorrect"
+        assert annotation["response_type"] == "answered"
+
     def test_load_and_get_record(self, dataset_path: Path):
         store = AnnotationStore(dataset_path)
         record = store.get_record("test-000")

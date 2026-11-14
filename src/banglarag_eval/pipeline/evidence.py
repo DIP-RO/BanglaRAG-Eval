@@ -52,7 +52,13 @@ _CONTRADICTION_PREFIXES = [
 def build_correct_evidence(retrieval: RetrievalResult) -> EvidenceResult:
     """Build correct evidence condition — use retrieved context as-is."""
     docs = [
-        {"document_id": d.document_id, "text": d.text, "rank": d.rank, "score": d.score}
+        {
+            "document_id": d.document_id,
+            "text": d.text,
+            "rank": d.rank,
+            "score": d.score,
+            "source": d.source,
+        }
         for d in retrieval.documents
     ]
     return EvidenceResult(
@@ -74,7 +80,13 @@ def build_partially_relevant_evidence(
 
     # Keep only the top document, drop the rest
     kept = retrieval.documents[0]
-    docs = [{"document_id": kept.document_id, "text": kept.text, "rank": 1, "score": kept.score}]
+    docs = [{
+        "document_id": kept.document_id,
+        "text": kept.text,
+        "rank": 1,
+        "score": kept.score,
+        "source": kept.source,
+    }]
     original_ids = [d.document_id for d in retrieval.documents[1:]]
 
     return EvidenceResult(
@@ -109,6 +121,7 @@ def build_irrelevant_evidence(
             "text": irrelevant_text,
             "rank": 1,
             "score": 0.0,
+            "source": "controlled_corruption",
         }],
         corruption_metadata={
             "corruption_type": "context_replacement",
@@ -142,6 +155,7 @@ def build_contradictory_evidence(
             "text": d.text if i == 0 else d.text,
             "rank": d.rank,
             "score": d.score,
+            "source": d.source,
         } for i, d in enumerate(retrieval.documents)],
         corruption_metadata={
             "corruption_type": "contradiction_injection",

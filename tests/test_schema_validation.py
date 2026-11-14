@@ -81,6 +81,28 @@ class TestStructuralValidation:
 
 
 class TestCrossFieldRules:
+    def test_separate_human_gold_dimensions_require_matching_provenance(self, valid_record):
+        annotations = [
+            {
+                **_annotation("ann-1", "faithful"),
+                "correctness_label": "incorrect",
+                "response_type": "answered",
+            },
+            {
+                **_annotation("ann-2", "faithful"),
+                "correctness_label": "incorrect",
+                "response_type": "answered",
+            },
+        ]
+        valid_record["annotations"] = annotations
+        valid_record["faithfulness_category"] = "faithful"
+        valid_record["factual_correctness_category"] = "incorrect"
+        valid_record["response_behavior"] = "answered"
+
+        result = validate_record(valid_record)
+
+        assert result.is_valid, result.errors
+
     def test_r1_native_bangla_cannot_be_machine_translated(self, valid_record):
         valid_record["data_origin"] = "machine_translated"
         result = validate_record(valid_record)

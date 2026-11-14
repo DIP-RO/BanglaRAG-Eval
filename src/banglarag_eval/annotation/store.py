@@ -19,13 +19,15 @@ from typing import Any
 
 from banglarag_eval.constants import (
     ADJUDICATION_METHODS,
+    FACTUAL_CORRECTNESS_CATEGORIES,
     FAITHFULNESS_CATEGORIES,
     MIN_INDEPENDENT_ANNOTATORS,
+    RESPONSE_BEHAVIORS,
 )
 from banglarag_eval.dataset import save_dataset
 from banglarag_eval.schema import validate_record
 
-# Fields that annotators must NOT see (per docs/annotation_guidelines.md).
+# Fields that annotators must NOT see (per the README guidelines).
 _HIDDEN_FIELDS = frozenset({
     "source_text",
     "source_span",
@@ -36,6 +38,8 @@ _HIDDEN_FIELDS = frozenset({
     "annotations",
     "adjudication",
     "faithfulness_category",
+    "factual_correctness_category",
+    "response_behavior",
     "hallucination_type",
     "evaluator_outputs",
     "question_generation",
@@ -49,6 +53,7 @@ _HIDDEN_FIELDS = frozenset({
     "generator_model",
     "generator_version",
     "generation_settings",
+    "raw_generated_output",
     "prompt_version",
     "cost",
     "latency",
@@ -97,8 +102,8 @@ class AnnotationStore:
     def get_annotation_view(self, example_id: str) -> dict[str, Any] | None:
         """Return a sanitized record view for the annotator.
 
-        Shows only: example_id, question, question_language,
-        retrieved_context, generated_answer, answer_claims.
+        Shows the RAG input/output plus the original reference answer needed
+        for the separate factual-correctness judgment.
         Everything else is stripped per the annotation guidelines.
         """
         record = self.get_record(example_id)
@@ -111,6 +116,7 @@ class AnnotationStore:
             "retrieved_context": record.get("retrieved_context"),
             "generated_answer": record.get("generated_answer"),
             "answer_claims": record.get("answer_claims"),
+            "reference_answer": record.get("intended_answer"),
         }
 
     def get_pending_ids(self, annotator_id: str) -> list[str]:
@@ -146,6 +152,8 @@ class AnnotationStore:
         annotator_id: str,
         label: str,
         explanation: str,
+        correctness_label: str = "unjudgeable",
+        response_type: str = "answered",
     ) -> dict[str, Any]:
         """Append an annotation to the record, validate, and save.
 
@@ -160,6 +168,15 @@ class AnnotationStore:
             )
         if not explanation or not explanation.strip():
             raise ValueError("explanation is required and must not be empty")
+        if correctness_label not in FACTUAL_CORRECTNESS_CATEGORIES:
+            raise ValueError(
+                f"invalid correctness label '{correctness_label}'; must be one of "
+                f"{FACTUAL_CORRECTNESS_CATEGORIES}"
+            )
+        if response_type not in RESPONSE_BEHAVIORS:
+            raise ValueError(
+                f"invalid response type '{response_type}'; must be one of {RESPONSE_BEHAVIORS}"
+            )
 
         record = self.get_record(example_id)
         if record is None:
@@ -176,11 +193,25 @@ class AnnotationStore:
         annotation = {
             "annotator_id": annotator_id,
             "label": label,
+            "correctness_label": correctness_label,
+            "response_type": response_type,
             "explanation": explanation.strip(),
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
         record.setdefault("annotations", []).append(annotation)
+        annotations = record["annotations"]
+        if len(annotations) >= MIN_INDEPENDENT_ANNOTATORS:
+            support = {item["label"] for item in annotations}
+            correctness = {item.get("correctness_label") for item in annotations}
+            behavior = {item.get("response_type") for item in annotations}
+            record["faithfulness_category"] = next(iter(support)) if len(support) == 1 else None
+            record["factual_correctness_category"] = (
+                next(iter(correctness)) if len(correctness) == 1 and None not in correctness else None
+            )
+            record["response_behavior"] = (
+                next(iter(behavior)) if len(behavior) == 1 and None not in behavior else None
+            )
         self._save()
         return annotation
 
@@ -221,6 +252,8 @@ class AnnotationStore:
         label: str,
         explanation: str,
         method: str = "third_rater",
+        correctness_label: str = "unjudgeable",
+        response_type: str = "answered",
     ) -> dict[str, Any]:
         """Add adjudication, set gold label, validate, and save.
 
@@ -239,6 +272,10 @@ class AnnotationStore:
             )
         if not explanation or not explanation.strip():
             raise ValueError("explanation is required and must not be empty")
+        if correctness_label not in FACTUAL_CORRECTNESS_CATEGORIES:
+            raise ValueError(f"invalid correctness label '{correctness_label}'")
+        if response_type not in RESPONSE_BEHAVIORS:
+            raise ValueError(f"invalid response type '{response_type}'")
 
         record = self.get_record(example_id)
         if record is None:
@@ -265,6 +302,8 @@ class AnnotationStore:
 
         adjudication = {
             "label": label,
+            "correctness_label": correctness_label,
+            "response_type": response_type,
             "explanation": explanation.strip(),
             "adjudicator_id": adjudicator_id,
             "method": method,
@@ -273,6 +312,8 @@ class AnnotationStore:
 
         record["adjudication"] = adjudication
         record["faithfulness_category"] = label
+        record["factual_correctness_category"] = correctness_label
+        record["response_behavior"] = response_type
         self._save()
         return adjudication
 

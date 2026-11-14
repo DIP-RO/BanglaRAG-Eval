@@ -26,7 +26,7 @@ class EvaluatorOutput:
     """Standardized output from any evaluator.
 
     Fields match the `evaluator_outputs` schema in
-    configs/schema/record.schema.json.
+    configs/record.schema.json.
     """
 
     evaluator_name: str

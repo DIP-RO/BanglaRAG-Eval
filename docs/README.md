@@ -9,7 +9,7 @@ This directory contains all project documentation for BanglaRAG-Eval.
 | [RESEARCH_PROTOCOL.md](RESEARCH_PROTOCOL.md) | Full research protocol — RQs, hypotheses, benchmark design, metrics, reproducibility | Supervisor, reviewers |
 | [pilot_design.md](pilot_design.md) | Two-stage pilot study design with Stage 1 gates | Supervisor, implementers |
 | [data_schema.md](data_schema.md) | Canonical record schema, field definitions, validation rules R1–R10 | Implementers |
-| [annotation_guidelines.md](annotation_guidelines.md) | Annotator instructions — 5-way taxonomy, decision procedure, worked examples | Annotators |
+| Root README | Annotator instructions — 5-way taxonomy, decision procedure, worked examples | Annotators |
 | [evaluation_protocol.md](evaluation_protocol.md) | Evaluator framework, metrics, statistics, circularity controls | Implementers, reviewers |
 
 ## Quick Navigation
@@ -20,7 +20,7 @@ This directory contains all project documentation for BanglaRAG-Eval.
 3. Read [evaluation_protocol.md](evaluation_protocol.md) for evaluator comparison methodology
 
 ### For annotators
-1. Read [annotation_guidelines.md](annotation_guidelines.md) for labeling instructions
+1. Read the root README for labeling instructions
 2. Open the annotation server (see scripts/run_annotation_server.py)
 3. Login with your assigned annotator ID
 
@@ -43,7 +43,6 @@ docs/
 ├── RESEARCH_PROTOCOL.md         ← Full research protocol (16 sections)
 ├── pilot_design.md              ← Two-stage pilot design with gates
 ├── data_schema.md               ← Record schema + validation rules
-├── annotation_guidelines.md     ← Annotator instructions
 └── evaluation_protocol.md       ← Evaluator + metrics + statistics
 ```
 
@@ -51,7 +50,7 @@ docs/
 
 | File | Location | Purpose |
 |---|---|---|
-| Record schema | `configs/schema/record.schema.json` | JSON Schema draft 2020-12 |
+| Record schema | `configs/record.schema.json` | JSON Schema draft 2020-12 |
 | Stage 1 config | `configs/pilot_stage1.yaml` | 40 examples, methodology validation |
 | Stage 2 config | `configs/pilot_stage2.yaml` | 400 examples, pilot expansion |
 | Conditions | `configs/conditions.yaml` | Language + evidence condition vocabularies |

@@ -8,6 +8,63 @@ before spending annotation budget at scale. The pilot produces no research
 findings; it produces evidence that the pipeline can produce trustworthy
 findings.
 
+## Methodology-repair pilot (v3)
+
+The active repair pilot is configured in
+`configs/campaign_10000_v3_unreviewed.yaml`.
+It replaces the rejected pre-annotation campaign for the next experimental
+run; both older checkpoints remain audit artifacts.
+
+- 10 underlying questions, blocked evenly across the five language
+  conditions; all variants of a question remain in one analysis group.
+- Five evidence variants per question and one generator: 50 outputs total.
+- BM25 only. SemFuse is not part of this pilot.
+- One raw BM25 top-5 result is frozen per question. Correct, partial,
+  irrelevant, and contradictory variants preserve five passage slots; the
+  missing condition intentionally has zero.
+- Oracle augmentation is stored separately from raw retrieval and is excluded
+  from Recall@K, MRR, and nDCG.
+- Exact duplicate passages are removed before indexing and cannot occupy
+  multiple retrieval ranks.
+- Open-ended and appearance contradictions require curated same-slot
+  candidates. Generation remains blocked until humans approve plausibility,
+  grammar, and actual fact change.
+- Partial evidence requires a human judgment that the answer is neither
+  explicit nor reasonably inferable. Exact-string absence is not sufficient.
+- Topical relevance and question answerability are stored as separate fields.
+- Question meaning, answer leakage, and evidence construction are approved by
+  two independent reviewers in
+  review packet before generation.
+- Round-trip Bangla retains its original Bangla, intermediate English, final
+  Bangla, and explicit translation path.
+- Generation records `finish_reason`, `truncated`, question/context/answer
+  language, and preserves the exact original model output.
+
+All train/test splits use `split_group_id`, the source-article grouping key.
+Bootstrap resampling uses the same article-level cluster. Output rows are never
+treated as independent samples.
+
+Create the review packet with:
+
+```bash
+python scripts/run_campaign.py review \
+  --config configs/campaign_10000_v3_unreviewed.yaml \
+  --questions data/intermediate/campaign_10000_v2_questions.jsonl \
+  --overwrite-review-packet
+```
+
+The `generate` phase fails closed while any packet row is pending or any
+condition-specific review check is false.
+
+Each reviewer independently appends one object to `review.decisions` with an
+opaque `reviewer_id`, ISO-8601 `timestamp`, `decision: approved`, and a
+`checks` object. The coordinator sets `review.status` to `approved` only after
+two distinct reviewers approve. Partial rows require
+`answer_not_inferable_for_partial: true`; contradictory rows additionally
+require `contradiction_is_type_compatible: true` and
+`result_is_grammatical: true`. A failed check means the candidate must be
+repaired and reviewed again, never waived.
+
 ## Two-stage structure
 
 ### Stage 1 — Methodology validation (30–50 examples)
@@ -60,7 +117,7 @@ datasets are not downloaded or redistributed.
 
 ## Annotation process
 
-Per [annotation_guidelines.md](annotation_guidelines.md): two independent
+Per the annotation guidelines in the root README: two independent
 annotators per example with required explanations. Gold labels come from
 unanimous agreement directly, or from adjudication (recorded as
 `third_rater` — independent of the annotators — or `joint_session`) when the
@@ -104,7 +161,7 @@ infrastructure behind the `RAGBackend` interface.
 | Gate | Threshold | On failure |
 |---|---|---|
 | Annotation agreement | Cohen's κ ≥ 0.60 on the 5-way labels (target ≥ 0.70), reported with a 95% bootstrap CI. Scaling additionally requires the CI lower bound ≥ 0.40; at Stage-1 n the CI is wide, so a passing point estimate with a lower bound below 0.40 extends the Stage-1 sample instead of scaling. | Revise guidelines/taxonomy, re-pilot on a fresh sub-batch. κ < 0.40 → redesign taxonomy before any scaling. |
-| Taxonomy adequacy | < 10% of examples carry a `NO-FIT:` marker in any annotator's explanation (the marker is defined in [annotation_guidelines.md](annotation_guidelines.md)) | Revise taxonomy; version bump. |
+| Taxonomy adequacy | < 10% of examples carry a `NO-FIT:` marker in any annotator's explanation (the marker is defined in the root README) | Revise taxonomy; version bump. |
 | Condition integrity | **All** Stage-1 examples re-labeled: a checker blind to the stored `evidence_condition` independently assigns a condition from the question/context/answer; ≥ 90% must match the stored label. (Checking 100% is feasible at n ≤ 50; the Stage-2 sampling rate will be pre-registered before Stage 2.) | Fix construction procedures; regenerate affected cells. |
 | Pipeline integrity | 100% of records pass validation; every stage's metadata complete | Fix tooling before scaling. |
 | Evaluator harness | Each configured evaluator produces standardized output on ≥ 95% of examples (failures logged, not silently dropped) | Fix adapters; re-run. |

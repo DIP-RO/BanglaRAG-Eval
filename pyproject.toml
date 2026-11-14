@@ -9,6 +9,7 @@ description = "Benchmark infrastructure for evaluating RAG faithfulness evaluato
 requires-python = ">=3.10"
 dependencies = [
     "PyYAML",
+    "bangla-nlpkit>=0.1.1,<1",
     "jsonschema>=4.18",
 ]
 
@@ -18,6 +19,16 @@ dev = ["pytest"]
 annotation = ["flask>=3.0"]
 # Metrics/analysis stack, needed from Milestone 2 onward.
 analysis = ["numpy", "pandas", "scikit-learn", "scipy", "tqdm"]
+# SemFuse multilingual semantic/keyword/hybrid retrieval backend.
+semfuse = ["semfuse[embeddings]>=0.10,<1"]
+# Complete reproducible campaign stack: hybrid retrieval plus local BanglaT5 MT.
+campaign = [
+    "semfuse[embeddings]>=0.10,<1",
+    "transformers>=4.40,<6",
+    "torch>=2.2,<3",
+    "sentencepiece>=0.2,<1",
+    "protobuf>=5,<7",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
