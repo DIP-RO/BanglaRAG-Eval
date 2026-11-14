@@ -59,6 +59,28 @@ def main() -> None:
         default=42,
         help="Random seed (default: 42)",
     )
+    parser.add_argument(
+        "--retriever",
+        choices=("bm25", "dense", "hybrid", "semfuse"),
+        default="bm25",
+        help="Retrieval configuration (default: bm25)",
+    )
+    parser.add_argument(
+        "--embedding-model",
+        default="bge-m3",
+        help="Ollama embedding model for dense/hybrid retrieval (default: bge-m3)",
+    )
+    parser.add_argument(
+        "--embedding-base-url",
+        default=None,
+        help="Ollama API base URL for embeddings (default: OLLAMA_BASE_URL)",
+    )
+    parser.add_argument(
+        "--top-k",
+        type=int,
+        default=3,
+        help="Number of passages retrieved per question (default: 3)",
+    )
 
     args = parser.parse_args()
 
@@ -83,6 +105,10 @@ def main() -> None:
         language_conditions=args.languages,
         use_ollama=use_ollama,
         seed=args.seed,
+        retrieval_method=args.retriever,
+        embedding_model=args.embedding_model,
+        embedding_base_url=args.embedding_base_url,
+        retrieval_top_k=args.top_k,
     )
 
     print("=" * 60)
@@ -101,6 +127,10 @@ def main() -> None:
     print("Generation models:")
     for model, count in sorted(summary["generation_models"].items()):
         print(f"  {model:30s} {count:4d}")
+    print()
+    print("Retrievers:")
+    for retriever, count in sorted(summary["retriever_distribution"].items()):
+        print(f"  {retriever:30s} {count:4d}")
     print()
     print(f"Ollama used:       {summary['ollama_used']}")
     print(f"Elapsed:           {summary['elapsed_seconds']}s")

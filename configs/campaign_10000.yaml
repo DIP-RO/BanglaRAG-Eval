@@ -1,0 +1,106 @@
+# Full pre-annotation campaign requested by the project owner on 2026-10-11.
+# This deliberately precedes the human Stage-1 gates and is therefore a
+# protocol deviation, not evidence that Issues #9/#10/#16/#17 are complete.
+
+dataset_version: campaign-10000-preannotation-1.0.0
+target_records: 10000
+base_examples: 200
+random_seed: 20261011
+
+source:
+  name: BanglaQuAD-v1.0
+  split: train
+  repository: https://github.com/banglaAI/BanglaQuAD-v1.0
+  file: BanglaQuADv1.0-train.json
+  git_blob_sha: be823b3863ea89c94112e9ea2f551982fcd10d10
+  sha256: ec5226e58b465d43f7a7b51976856099b2cac4145a5936aa204603f8c1dae2e6
+  license: MIT
+
+question_preparation:
+  file: data/intermediate/campaign_10000_questions_final_v2.jsonl
+  sha256: cca91c20948fdd50d7fecfc064e1d1124bf973a34ba38e9249d829c51c09d362
+  source_questions: 200
+  variants_per_question: 5
+  audited_translation_overrides: 83
+  overrides_file: configs/campaign_translation_overrides.yaml
+  overrides_sha256: 6f9e8a654d0332c6132a75de21b7d908b35d97e2c985a98a8800999ea01386bd
+  bangla_to_english:
+    model: csebuetnlp/banglat5_nmt_bn_en
+    revision: 997417a326d498848f501f5b9a7c6995684b2402
+    weights_sha256: 5dfcbd9bb8d28b14e72298260e00bd024cd15aace6482a1b3073eaeb55136c82
+    tokenizer_sha256: 7dcab96935a2a51b1461c84e44c952ea8a3640c8bc3e2c6ae7a21d855454ae27
+    license: CC-BY-NC-SA-4.0
+  english_to_bangla:
+    model: csebuetnlp/banglat5_nmt_en_bn
+    revision: 79c6138c6b8aff5148eabc804264be900e048ae1
+    weights_sha256: 4b35f8574de7bc4a21aa2e0fd430092167bee9c61863b87037b87e056f51edf0
+    tokenizer_sha256: 7dcab96935a2a51b1461c84e44c952ea8a3640c8bc3e2c6ae7a21d855454ae27
+    license: CC-BY-NC-SA-4.0
+  decoding: beam_search_4
+  code_mix_rule: code_mix_lexical_v2
+  banglish:
+    package: bangla-nlpkit
+    version: 0.1.1
+    rule: nlc_confusable_normalization_v1
+    license: MIT
+
+language_conditions:
+  - native_bangla
+  - translated_bangla
+  - code_mixed
+  - banglish
+  - english
+
+evidence_conditions:
+  - correct
+  - partially_relevant
+  - irrelevant
+  - contradictory
+  - missing
+
+# Both generators see each scenario. Retrieval is deterministically assigned
+# 50/50 per scenario and shared by the paired generator outputs.
+generator_models:
+  - qwen3:8b
+  - gemma3:4b
+model_artifacts:
+  qwen3:8b:
+    ollama_id: 500a1f067a9f
+    weights_sha256: a3de86cd1c132c822487ededd47a324c50491393e6565cd14bafa40d0b8e686f
+    parameters: 8.2B
+    quantization: Q4_K_M
+    license: Apache-2.0
+  gemma3:4b:
+    ollama_id: 68ceab7e468a
+    weights_sha256: f06e91e18fc74295d0c781bf91622508c75655e2c18ed869d52447ffe1e667e1
+    projector_sha256: 7a50f9607a47389c028f2598c1f2d3e23b61913b4ce3c4a9eaaca62de1b9e098
+    parameters: 3.9B
+    quantization: Q4_K_M
+    license: Gemma-Terms-of-Use
+retrieval_methods:
+  - bm25
+  - semfuse
+retrieval_top_k: 5
+
+semfuse:
+  package_version: 0.10.0
+  mode: hybrid
+  embedding_model: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+  embedding_model_revision: e8f8c211226b894fcb81acc59f3b34ba3efd5f42
+  embedding_model_license: Apache-2.0
+  embedding_provider: local
+  fusion_method: rrf
+  reranker: null
+
+generation:
+  temperature: 0.0
+  max_tokens: 128
+  prompt_version: rag_campaign_concise_v1
+
+protocol_deviation:
+  approved_by: project_owner
+  date: 2026-10-11
+  description: >
+    Construct the full pre-annotation campaign before independent Stage-1
+    annotation, adjudication, and gate measurement. Human-only fields remain
+    empty and no gate or issue is marked complete by this run.

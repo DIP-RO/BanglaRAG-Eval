@@ -34,13 +34,23 @@ The protocol's flat field list is preserved with these documented adaptations:
 
 No reproducibility field was removed.
 
+Schema `1.1.0` adds three construction safeguards while retaining support for
+existing `1.0.0` audit records:
+
+- `evidence_topical_relevance` and `evidence_answerability` distinguish related
+  but insufficient context from answer-supporting context;
+- `question_generation` retains the original, intermediate, and final questions
+  plus the translation path for round-trip translation;
+- `split_group_id` identifies the source article and is the required unit for
+  leakage-safe dataset splitting.
+
 ## Field reference
 
 ### Identity & provenance (required at creation)
 
 | Field | Type | Meaning |
 |---|---|---|
-| `schema_version` | string (semver) | Schema this record conforms to (currently `1.0.0`). |
+| `schema_version` | string (semver) | Schema this record conforms to (current construction schema: `1.1.0`). |
 | `example_id` | string | Globally unique example identifier. |
 | `document_id` | string | Source document the question was built from. |
 | `source_id` | string | Source collection/corpus identifier. |
@@ -66,13 +76,17 @@ source span.
 `retrieved_context` (exact string shown to the generator),
 `retrieval_documents[]` (`{document_id, text, rank, score, source}`),
 `retrieval_configuration` (free-form config dump), plus flat convenience
-fields `retriever`, `embedding_model`, `reranker`.
+fields `retriever`, `embedding_model`, `reranker`. Controlled studies also
+store `raw_retrieval_documents` and `raw_retrieval_configuration` before any
+oracle insertion or corruption; retrieval metrics use only these raw fields.
 
 ### Generation stage (null until run)
 
-`generated_answer`, `answer_claims[]`, `generator_model`,
+`generated_answer`, `raw_generated_output` (verbatim response before adapter
+cleanup), `answer_claims[]`, `generator_model`,
 `generator_version`, `generation_settings`, `prompt_version`, `cost`
-(USD), `latency` (seconds), `random_seed`. Existing generations are never
+(including `finish_reason` and `truncated`), `context_language`,
+`answer_language`, `cost` (USD), `latency` (seconds), `random_seed`. Existing generations are never
 overwritten (`save_dataset` refuses by default).
 
 ### Controlled corruption (null unless corrupted)
@@ -95,13 +109,19 @@ cannot detect it mechanically (rule R6 enforces only the converse).
 
 ### Human annotation (human-entered only)
 
-`annotations[]`: `{annotator_id, label, explanation, timestamp}` with labels
-from the faithfulness taxonomy; `adjudication`: `{label, explanation,
+`annotations[]`: `{annotator_id, label, correctness_label, response_type,
+explanation, timestamp}`. `label` measures support from the supplied context;
+`correctness_label` measures agreement with the original reference; and
+`response_type` records answered/abstained/mixed behavior. Legacy records may
+lack the latter two fields, but the v2 pilot annotation UI always writes them.
+`adjudication`: `{label, correctness_label, response_type, explanation,
 adjudicator_id, method, timestamp}` where `method` records the resolution
 mechanism (`third_rater` — independent of the annotators, rule R8 — or
-`joint_session`); `faithfulness_category` (gold — the adjudicated label, or
+`joint_session`); `faithfulness_category` (context-support gold — the adjudicated label, or
 the unanimous label of the independent annotators when they agree and no
-adjudication exists, rule R3); `hallucination_type` (optional finer-grained
+adjudication exists, rule R3); `factual_correctness_category` and
+`response_behavior` (the corresponding separate human gold fields);
+`hallucination_type` (optional finer-grained
 type; human-assigned only, rule R9).
 
 ### Automatic evaluation (systems under test, never gold)

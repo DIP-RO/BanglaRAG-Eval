@@ -59,6 +59,30 @@
     {% endfor %}
   </div>
 
+  <h2>Response Behavior</h2>
+  <div class="method-choices">
+    {% for response_type in response_types %}
+    <label class="method-option">
+      <input type="radio" name="response_type" value="{{ response_type }}" required>
+      <span class="method-name">{{ response_type | replace('_',' ') | title }}</span>
+    </label>
+    {% endfor %}
+  </div>
+
+  <h2>Correctness Against Original Reference</h2>
+  <p class="instruction">
+    This is separate from evidence support. Original reference answer:
+    <strong>{{ record.reference_answer }}</strong>
+  </p>
+  <div class="method-choices">
+    {% for correctness_label in correctness_labels %}
+    <label class="method-option">
+      <input type="radio" name="correctness_label" value="{{ correctness_label }}" required>
+      <span class="method-name">{{ correctness_label | replace('_',' ') | title }}</span>
+    </label>
+    {% endfor %}
+  </div>
+
   <h2>Explanation <span class="required">(required)</span></h2>
   <p class="instruction">
     Explain why you chose this label. Reference specific claims in the

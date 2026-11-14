@@ -9,23 +9,42 @@ annotated under different guideline versions is never silently mixed.
 
 ## What the annotator judges
 
-**Faithfulness to the retrieved evidence — not truth in the world.**
-An answer that is factually true but not supported by the retrieved context is
-*not* faithful. An answer that repeats an error present in the retrieved
-context *is* faithful (to the evidence). Annotators judge only the relation
-between the generated answer and the retrieved context shown to them.
+Annotators make three separate decisions. They must never collapse these into
+one label:
+
+1. **Context support (faithfulness):** whether the supplied retrieved context
+   supports the generated answer. An answer that repeats an error in corrupted
+   context can be faithful.
+2. **Reference correctness:** whether the generated answer agrees with the
+   original human-authored reference answer. A context-faithful answer can be
+   factually incorrect when the context was deliberately corrupted.
+3. **Response behavior:** `answered`, `abstained`, or `mixed`.
 
 ## What the annotator sees
 
 1. The question
 2. The retrieved evidence (exactly what the generator saw — `retrieved_context`)
 3. The generated answer
-4. The five category choices below
-5. A free-text explanation field (required)
+4. The original reference answer, for the separate correctness decision
+5. The support, correctness, and response-behavior choices
+6. A free-text explanation field (required)
 
-Annotators do **not** see: the original source document, the intended answer,
-the evidence-condition label, other annotators' labels, or any automatic
-evaluator output.
+Annotators do **not** see: the original source document, the evidence-condition
+label, other annotators' labels, or any automatic evaluator output. Annotators
+should assign context support before consulting the reference answer whenever
+the interface permits a staged/blinded pass.
+
+## Correctness taxonomy
+
+- `correct`: agrees with the original reference.
+- `partially_correct`: contains the reference answer but adds a material error
+  or omits a required part.
+- `incorrect`: gives an answer that conflicts with the reference.
+- `not_answered`: abstains or otherwise supplies no answer.
+- `unjudgeable`: the reference is inadequate for deciding correctness.
+
+Correctness is not a substitute for context support. Record both even when
+they appear redundant.
 
 ## Faithfulness taxonomy
 
@@ -143,10 +162,13 @@ a versioned schema bump — never as an ad-hoc field.
 1. **Two independent annotators** label every example (label + explanation),
    without seeing each other's work. The infrastructure supports more than
    two; two is the Stage 1 minimum (schema rule R4).
-2. Each annotation stores `annotator_id`, `label`, `explanation`, `timestamp`.
+2. Each annotation stores `annotator_id`, context-support `label`,
+   `correctness_label`, `response_type`, `explanation`, and `timestamp`.
 3. **Gold label — agreement case:** when the independent annotators assign
    the same label, that unanimous label becomes the gold
-   `faithfulness_category` directly; no adjudication record is created
+   `faithfulness_category` directly; unanimous correctness and response labels
+   similarly become `factual_correctness_category` and `response_behavior`.
+   No adjudication record is created
    (schema rule R3 accepts exactly this).
 4. **Gold label — disagreement case (adjudication):** when the labels
    disagree, an adjudication pass assigns the gold label. Two mechanisms are
@@ -159,8 +181,8 @@ a versioned schema bump — never as an ad-hoc field.
    different bias profiles) remain analyzable. `third_rater` is the default
    for Stage 1; `joint_session` is reserved for cases the third rater sends
    back for discussion.
-   The gold `faithfulness_category` comes from the unanimous label or the
-   adjudicated label — and by no other mechanism.
+   All three gold fields come from unanimous labels or adjudication, and by no
+   other mechanism.
 5. **Agreement measurement:** Cohen's κ (two annotators, categorical labels)
    and raw agreement are computed on every batch *before* scaling decisions.
    Stage-1 gates are defined in [pilot_design.md](pilot_design.md).

@@ -4,6 +4,7 @@ Implements:
 - Paired bootstrap (evaluator A vs B on same examples)
 - McNemar's test (paired binary correctness)
 - Bootstrap confidence intervals for any point estimate
+- Cluster bootstrap for repeated variants of one question/article
 - Holm correction for multiple comparisons
 
 Each test is applied only where its assumptions hold. The rationale for
@@ -203,6 +204,43 @@ def paired_bootstrap(
         confidence_level=confidence_level,
         n_bootstrap=n_bootstrap,
         n_samples=n,
+        bootstrap_estimates=estimates,
+    )
+
+
+def cluster_bootstrap_ci(
+    data: list[float],
+    cluster_ids: list[str],
+    statistic: Callable[[list[float]], float] = np.mean,
+    n_bootstrap: int = 10000,
+    confidence_level: float = 0.95,
+    seed: int = 42,
+) -> BootstrapResult:
+    """Bootstrap whole question/article clusters instead of treating rows as IID."""
+    if len(data) != len(cluster_ids):
+        raise ValueError(f"Length mismatch: {len(data)} vs {len(cluster_ids)}")
+    if not data:
+        return BootstrapResult(0.0, 0.0, 0.0, confidence_level, n_bootstrap, 0)
+
+    grouped: dict[str, list[float]] = {}
+    for value, cluster_id in zip(data, cluster_ids, strict=True):
+        grouped.setdefault(cluster_id, []).append(value)
+    clusters = list(grouped)
+    rng = np.random.default_rng(seed)
+    estimates: list[float] = []
+    for _ in range(n_bootstrap):
+        sampled = rng.choice(clusters, size=len(clusters), replace=True)
+        values = [value for cluster_id in sampled for value in grouped[str(cluster_id)]]
+        estimates.append(float(statistic(values)))
+
+    alpha = 1 - confidence_level
+    return BootstrapResult(
+        point_estimate=float(statistic(data)),
+        ci_lower=float(np.percentile(estimates, 100 * alpha / 2)),
+        ci_upper=float(np.percentile(estimates, 100 * (1 - alpha / 2))),
+        confidence_level=confidence_level,
+        n_bootstrap=n_bootstrap,
+        n_samples=len(clusters),
         bootstrap_estimates=estimates,
     )
 

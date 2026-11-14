@@ -29,6 +29,9 @@ class GenerationResult:
     latency_seconds: float
     eval_count: int  # number of tokens generated
     raw_response: str  # full response including thinking trace
+    max_tokens: int = 256
+    finish_reason: str | None = None
+    truncated: bool = False
 
 
 # Default RAG prompt template — works for all language conditions.
@@ -84,6 +87,8 @@ def generate(
     temperature: float = 0.0,
     base_url: str | None = None,
     timeout: int = 120,
+    max_tokens: int = 256,
+    thinking: bool = False,
     prompt_template: str = RAG_PROMPT_TEMPLATE,
 ) -> GenerationResult:
     """Generate an answer using Ollama.
@@ -95,6 +100,8 @@ def generate(
         temperature: Generation temperature (default: 0 for determinism).
         base_url: Ollama API URL (default: from OLLAMA_BASE_URL env or localhost).
         timeout: Request timeout in seconds.
+        max_tokens: Maximum number of output tokens requested from Ollama.
+        thinking: Whether Ollama should enable a model's separate thinking mode.
         prompt_template: Prompt template with {context} and {question} placeholders.
 
     Returns:
@@ -113,9 +120,11 @@ def generate(
         "model": model,
         "prompt": prompt,
         "stream": False,
+        "think": thinking,
         "options": {
             "temperature": temperature,
             "seed": 42,  # deterministic for reproducibility
+            "num_predict": max_tokens,
         },
     }).encode("utf-8")
 
@@ -153,13 +162,18 @@ def generate(
     # Strip leading "Answer:" prefix that the model may echo from the prompt
     answer = re.sub(r'^\s*Answer:\s*', '', answer).strip()
 
+    finish_reason = data.get("done_reason")
+    eval_count = data.get("eval_count", 0)
     return GenerationResult(
         answer=answer,
         model=model,
         temperature=temperature,
         latency_seconds=round(latency, 3),
-        eval_count=data.get("eval_count", 0),
+        eval_count=eval_count,
         raw_response=raw_response,
+        max_tokens=max_tokens,
+        finish_reason=finish_reason,
+        truncated=finish_reason == "length" or eval_count >= max_tokens,
     )
 
 

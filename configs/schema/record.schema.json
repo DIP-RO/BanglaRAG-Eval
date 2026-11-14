@@ -35,6 +35,11 @@
       "minLength": 1,
       "description": "Identifier of the source document the question was constructed from."
     },
+    "split_group_id": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "description": "Stable source-article group used for leakage-safe dataset splitting. All QAs and all language/evidence variants from one article share this value."
+    },
     "source_id": {
       "type": "string",
       "minLength": 1,
@@ -107,6 +112,26 @@
         }
       }
     },
+    "raw_retrieval_documents": {
+      "type": "array",
+      "description": "Unmodified retriever output used for retrieval metrics. Oracle passages and controlled corruptions never appear here.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["document_id", "text", "rank"],
+        "properties": {
+          "document_id": {"type": "string", "minLength": 1},
+          "text": {"type": "string"},
+          "rank": {"type": "integer", "minimum": 1},
+          "score": {"type": ["number", "null"]},
+          "source": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "raw_retrieval_configuration": {
+      "type": ["object", "null"],
+      "description": "Configuration attached to raw_retrieval_documents before oracle augmentation."
+    },
     "retrieval_configuration": {
       "type": ["object", "null"],
       "description": "Full retrieval configuration dump (top_k, index version, analyzer, etc.) for reproducibility. Free-form object; the common fields also appear flat below."
@@ -120,9 +145,23 @@
       "type": ["string", "null"],
       "description": "How the evidence condition was constructed or verified for this example."
     },
+    "evidence_topical_relevance": {
+      "type": ["string", "null"],
+      "enum": ["relevant", "irrelevant", "none", null],
+      "description": "Whether the supplied context remains topically related to the question, recorded separately from answerability."
+    },
+    "evidence_answerability": {
+      "type": ["string", "null"],
+      "enum": ["answerable", "insufficient", "contradicted", "no_context", null],
+      "description": "Whether the supplied context supports answering the question, independent of topical relevance."
+    },
     "generated_answer": {
       "type": ["string", "null"],
       "description": "Exact answer produced by the generator. Null until the generation stage has run."
+    },
+    "raw_generated_output": {
+      "type": ["string", "null"],
+      "description": "Verbatim model response before adapter cleanup; retained for audit and truncation analysis."
     },
     "answer_claims": {
       "type": ["array", "null"],
@@ -140,6 +179,16 @@
         null
       ],
       "description": "GOLD faithfulness category. Derived exclusively from human annotation: must equal adjudication.label when an adjudication exists, or the unanimous label of >= 2 independent annotators otherwise (rule R3). Never populated by any automatic evaluator, including SemFuse, RAGAS, or LLM judges."
+    },
+    "factual_correctness_category": {
+      "type": ["string", "null"],
+      "enum": ["correct", "partially_correct", "incorrect", "not_answered", "unjudgeable", null],
+      "description": "Human gold correctness against intended_answer/original reference, separate from support by the supplied context."
+    },
+    "response_behavior": {
+      "type": ["string", "null"],
+      "enum": ["answered", "abstained", "mixed", null],
+      "description": "Human gold describing whether the model answered, abstained, or mixed an answer with an abstention."
     },
     "hallucination_type": {
       "type": ["string", "null"],
@@ -167,6 +216,14 @@
             "type": "string",
             "enum": ["faithful", "partially_faithful", "unsupported", "contradictory", "insufficient_evidence"]
           },
+          "correctness_label": {
+            "type": "string",
+            "enum": ["correct", "partially_correct", "incorrect", "not_answered", "unjudgeable"]
+          },
+          "response_type": {
+            "type": "string",
+            "enum": ["answered", "abstained", "mixed"]
+          },
           "explanation": {"type": "string", "minLength": 1},
           "timestamp": {"type": "string", "minLength": 1}
         }
@@ -180,6 +237,14 @@
         "label": {
           "type": "string",
           "enum": ["faithful", "partially_faithful", "unsupported", "contradictory", "insufficient_evidence"]
+        },
+        "correctness_label": {
+          "type": "string",
+          "enum": ["correct", "partially_correct", "incorrect", "not_answered", "unjudgeable"]
+        },
+        "response_type": {
+          "type": "string",
+          "enum": ["answered", "abstained", "mixed"]
         },
         "explanation": {"type": "string", "minLength": 1},
         "adjudicator_id": {"type": "string", "minLength": 1},
@@ -203,6 +268,14 @@
     "generation_settings": {
       "type": ["object", "null"],
       "description": "Decoding settings (temperature, max_tokens, etc.) used for generation."
+    },
+    "context_language": {
+      "type": ["string", "null"],
+      "description": "Surface language of the exact context shown to the generator, or 'none'."
+    },
+    "answer_language": {
+      "type": ["string", "null"],
+      "description": "Detected surface language/script of the generated answer."
     },
     "embedding_model": {
       "type": ["string", "null"],
@@ -228,9 +301,25 @@
         "model": {"type": ["string", "null"]},
         "model_version": {"type": ["string", "null"]},
         "prompt_version": {"type": ["string", "null"]},
-        "timestamp": {"type": ["string", "null"]}
+        "timestamp": {"type": ["string", "null"]},
+        "original_question": {"type": ["string", "null"]},
+        "intermediate_question": {"type": ["string", "null"]},
+        "final_question": {"type": ["string", "null"]},
+        "translation_path": {
+          "type": ["string", "null"],
+          "enum": ["bn->en", "bn->en->bn", null]
+        }
       },
       "description": "Provenance of the question itself (human-written vs model-generated, and with what)."
+    },
+    "construction_review": {
+      "type": ["object", "null"],
+      "description": "Human approval of question meaning and evidence-condition validity before generation. Automatic checks may not populate this field."
+    },
+    "construction_review_status": {
+      "type": ["string", "null"],
+      "enum": ["unreviewed", "approved", null],
+      "description": "Explicit construction-review state. It is 'approved' only when construction_review contains genuine human provenance."
     },
     "corruption_metadata": {
       "type": ["object", "null"],
@@ -241,7 +330,11 @@
         "original_context_ids": {"type": "array", "items": {"type": "string"}},
         "modified_context_ids": {"type": "array", "items": {"type": "string"}},
         "operation_description": {"type": "string", "minLength": 1},
-        "random_seed": {"type": ["integer", "null"]}
+        "random_seed": {"type": ["integer", "null"]},
+        "replacement_provenance": {
+          "type": ["object", "null"],
+          "description": "Origin and review status of a contradiction replacement candidate."
+        }
       },
       "description": "Present iff the retrieved evidence was deliberately corrupted. Original evidence is preserved in source_text / original_context_ids; corruption is never silent."
     },

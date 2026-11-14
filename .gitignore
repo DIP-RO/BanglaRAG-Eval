@@ -44,6 +44,8 @@ data/intermediate/
 data/pilot_stage1_real.jsonl
 data/pilot_stage1_annotated_v0.jsonl
 data/pilot_*.jsonl
+data/human_annotation_*.jsonl
+data/campaign_10000_v3_unreviewed.jsonl
 
 # Generated experiment outputs
 outputs/

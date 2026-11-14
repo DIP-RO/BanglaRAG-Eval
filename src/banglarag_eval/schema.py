@@ -30,6 +30,12 @@ methodological invariants that JSON Schema cannot express cleanly:
       adjudication, or unanimous independent annotations per R3).
   R10 source_span must be internally consistent with source_text:
       start < end, end within bounds, and span text matching the slice.
+  R11 round-trip translated questions must retain their Bangla source,
+      intermediate English question, final Bangla question, and path.
+  R12 when evidence relevance and answerability are recorded, their values
+      must agree with the controlled evidence condition.
+  R13 construction_review_status must truthfully reflect whether genuine
+      construction-review provenance is present.
 
 Alignment between language_condition and question_language is reported
 as a warning, not an error (see constants.EXPECTED_QUESTION_LANGUAGE).
@@ -104,11 +110,15 @@ def _parse_iso8601(value: str) -> bool:
         return False
 
 
-def _unanimous_label(annotations: list[dict[str, Any]]) -> str | None:
-    """The unanimous annotation label, or None if too few or split."""
+def _unanimous_field(
+    annotations: list[dict[str, Any]], field_name: str
+) -> str | None:
+    """Return a unanimous human field, or None if too few or split."""
     if len(annotations) < MIN_INDEPENDENT_ANNOTATORS:
         return None
-    labels = {a["label"] for a in annotations}
+    if any(field_name not in annotation for annotation in annotations):
+        return None
+    labels = {a[field_name] for a in annotations}
     if len(labels) == 1:
         return next(iter(labels))
     return None
@@ -142,7 +152,7 @@ def validate_record(record: dict[str, Any]) -> ValidationResult:
 
     annotations = record.get("annotations", [])
     adjudication = record.get("adjudication")
-    unanimous = _unanimous_label(annotations)
+    unanimous = _unanimous_field(annotations, "label")
 
     # R3 — gold label only via human annotation (adjudicated label, or
     # the unanimous label of independent annotators).
@@ -165,6 +175,31 @@ def validate_record(record: dict[str, Any]) -> ValidationResult:
             result.errors.append(
                 f"R3: faithfulness_category '{gold}' does not match the "
                 f"unanimous annotation label '{unanimous}'"
+            )
+
+    for gold_field, annotation_field, adjudication_field in (
+        ("factual_correctness_category", "correctness_label", "correctness_label"),
+        ("response_behavior", "response_type", "response_type"),
+    ):
+        gold_value = record.get(gold_field)
+        if gold_value is None:
+            continue
+        unanimous_value = _unanimous_field(annotations, annotation_field)
+        if adjudication is not None:
+            if adjudication[adjudication_field] != gold_value:
+                result.errors.append(
+                    f"R3: {gold_field} '{gold_value}' does not match "
+                    f"adjudication.{adjudication_field} "
+                    f"'{adjudication[adjudication_field]}'"
+                )
+        elif unanimous_value is None:
+            result.errors.append(
+                f"R3: {gold_field} is set without unanimous human provenance"
+            )
+        elif unanimous_value != gold_value:
+            result.errors.append(
+                f"R3: {gold_field} '{gold_value}' does not match unanimous "
+                f"annotation {annotation_field} '{unanimous_value}'"
             )
 
     # R4 — adjudication requires independent annotations first.
@@ -214,6 +249,62 @@ def validate_record(record: dict[str, Any]) -> ValidationResult:
             result.errors.append(
                 f"R7: {location} '{value}' is not valid ISO-8601"
             )
+
+    # R11 — retain the complete path for round-trip translated Bangla.
+    schema_version = tuple(int(part) for part in record["schema_version"].split("."))
+    if (
+        schema_version >= (1, 1, 0)
+        and language_condition == "translated_bangla"
+        and question_generation is not None
+    ):
+        expected = {
+            "original_question": question_generation.get("original_question"),
+            "intermediate_question": question_generation.get("intermediate_question"),
+            "final_question": question_generation.get("final_question"),
+        }
+        if any(not value for value in expected.values()):
+            result.errors.append(
+                "R11: translated_bangla must retain original, intermediate, and final questions"
+            )
+        if question_generation.get("translation_path") != "bn->en->bn":
+            result.errors.append(
+                "R11: translated_bangla question_generation.translation_path must be 'bn->en->bn'"
+            )
+        if question_generation.get("final_question") != record["question"]:
+            result.errors.append(
+                "R11: translated_bangla final_question does not match record.question"
+            )
+
+    # R12 — topical relevance is distinct from question answerability.
+    evidence_contracts = {
+        "correct": ("relevant", "answerable"),
+        "partially_relevant": ("relevant", "insufficient"),
+        "irrelevant": ("irrelevant", "insufficient"),
+        "contradictory": ("relevant", "contradicted"),
+        "missing": ("none", "no_context"),
+    }
+    topical = record.get("evidence_topical_relevance")
+    answerability = record.get("evidence_answerability")
+    if topical is not None or answerability is not None:
+        expected_topical, expected_answerability = evidence_contracts[
+            record["evidence_condition"]
+        ]
+        if (topical, answerability) != (expected_topical, expected_answerability):
+            result.errors.append(
+                "R12: evidence relevance/answerability do not match evidence_condition"
+            )
+
+    # R13 — never imply human construction review without its provenance.
+    construction_status = record.get("construction_review_status")
+    construction_review = record.get("construction_review")
+    if construction_status == "approved" and construction_review is None:
+        result.errors.append(
+            "R13: approved construction_review_status requires construction_review provenance"
+        )
+    if construction_status == "unreviewed" and construction_review is not None:
+        result.errors.append(
+            "R13: unreviewed construction_review_status conflicts with construction_review"
+        )
 
     # R8 — third-rater adjudicators must be independent of the annotators.
     if adjudication is not None:

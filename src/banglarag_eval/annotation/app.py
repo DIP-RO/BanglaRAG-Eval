@@ -13,7 +13,8 @@ Routes:
   GET  /adjudicate/<id> → adjudication form for one record
   POST /adjudicate/<id> → save adjudication
 
-Annotators see only: question, retrieved_context, generated_answer.
+Annotators see the question, retrieved_context, generated_answer, and the
+original reference answer needed for a separate correctness judgment.
 Adjudicators see the above plus the disagreeing annotations.
 Neither sees: source_text, intended_answer, evidence_condition,
 evaluator_outputs, or any other hidden provenance field.
@@ -39,7 +40,9 @@ from flask import (
 from banglarag_eval.annotation.store import AnnotationStore
 from banglarag_eval.constants import (
     ADJUDICATION_METHODS,
+    FACTUAL_CORRECTNESS_CATEGORIES,
     FAITHFULNESS_CATEGORIES,
+    RESPONSE_BEHAVIORS,
 )
 
 _LABEL_DESCRIPTIONS = {
@@ -165,9 +168,18 @@ def create_app(
 
         if request.method == "POST":
             label = request.form.get("label", "").strip()
+            correctness_label = request.form.get("correctness_label", "unjudgeable").strip()
+            response_type = request.form.get("response_type", "answered").strip()
             explanation = request.form.get("explanation", "").strip()
             try:
-                s.add_annotation(example_id, annotator_id, label, explanation)
+                s.add_annotation(
+                    example_id,
+                    annotator_id,
+                    label,
+                    explanation,
+                    correctness_label,
+                    response_type,
+                )
                 flash(f"Saved annotation for {example_id}.", "success")
             except ValueError as exc:
                 flash(str(exc), "error")
@@ -179,6 +191,8 @@ def create_app(
                     "annotate.html",
                     record=view,
                     labels=FAITHFULNESS_CATEGORIES,
+                    correctness_labels=FACTUAL_CORRECTNESS_CATEGORIES,
+                    response_types=RESPONSE_BEHAVIORS,
                     label_descriptions=_LABEL_DESCRIPTIONS,
                     annotator_id=annotator_id,
                     pending=pending,
@@ -198,6 +212,8 @@ def create_app(
             "annotate.html",
             record=view,
             labels=FAITHFULNESS_CATEGORIES,
+            correctness_labels=FACTUAL_CORRECTNESS_CATEGORIES,
+            response_types=RESPONSE_BEHAVIORS,
             label_descriptions=_LABEL_DESCRIPTIONS,
             annotator_id=annotator_id,
             pending=pending,
@@ -252,11 +268,19 @@ def create_app(
 
         if request.method == "POST":
             label = request.form.get("label", "").strip()
+            correctness_label = request.form.get("correctness_label", "unjudgeable").strip()
+            response_type = request.form.get("response_type", "answered").strip()
             explanation = request.form.get("explanation", "").strip()
             method = request.form.get("method", "third_rater").strip()
             try:
                 s.add_adjudication(
-                    example_id, annotator_id, label, explanation, method
+                    example_id,
+                    annotator_id,
+                    label,
+                    explanation,
+                    method,
+                    correctness_label,
+                    response_type,
                 )
                 flash(f"Adjudication saved for {example_id}.", "success")
             except ValueError as exc:
@@ -268,6 +292,8 @@ def create_app(
                     "adjudicate.html",
                     record=view,
                     labels=FAITHFULNESS_CATEGORIES,
+                    correctness_labels=FACTUAL_CORRECTNESS_CATEGORIES,
+                    response_types=RESPONSE_BEHAVIORS,
                     label_descriptions=_LABEL_DESCRIPTIONS,
                     methods=ADJUDICATION_METHODS,
                     annotator_id=annotator_id,
@@ -284,6 +310,8 @@ def create_app(
             "adjudicate.html",
             record=view,
             labels=FAITHFULNESS_CATEGORIES,
+            correctness_labels=FACTUAL_CORRECTNESS_CATEGORIES,
+            response_types=RESPONSE_BEHAVIORS,
             label_descriptions=_LABEL_DESCRIPTIONS,
             methods=ADJUDICATION_METHODS,
             annotator_id=annotator_id,

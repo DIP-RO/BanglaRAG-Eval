@@ -1,0 +1,87 @@
+# Full BM25-only campaign. Each source QA is assigned exactly one language
+# condition, then crossed with five evidence conditions and two generators.
+# PAUSED: the 175-row checkpoint is retained as an audit-only construction
+# pilot. Do not resume this config until a fresh review packet is approved.
+campaign_status: paused_for_methodology_repair
+dataset_version: campaign-10000-methodology-2.0.0
+example_id_prefix: c10kv2
+experimental_design: blocked_language
+fixed_retrieval_per_question: true
+target_records: 10000
+base_examples: 1000
+random_seed: 20261011
+
+source:
+  name: BanglaQuAD-v1.0
+  split: train
+  repository: https://github.com/banglaAI/BanglaQuAD-v1.0
+  file: BanglaQuADv1.0-train.json
+  sha256: ec5226e58b465d43f7a7b51976856099b2cac4145a5936aa204603f8c1dae2e6
+  license: MIT
+
+question_preparation:
+  file: data/intermediate/campaign_10000_v2_questions.jsonl
+  sha256: 439c6789e2fb4a5a49b22f827efa185ed4c6bb7f1abef89c54f33e43ccd8914b
+  selection: seeded_article_balanced_round_robin
+  source_questions: 1000
+  language_assignment: blocked_round_robin
+  overrides_file: configs/campaign_translation_overrides.yaml
+  overrides_sha256: daa60bbf0b40fa6073fc15573755c46259b3c7acdabe3f548ea9b321d6ee24e5
+
+language_conditions:
+  - native_bangla
+  - translated_bangla
+  - code_mixed
+  - banglish
+  - english
+
+evidence_conditions:
+  - correct
+  - partially_relevant
+  - irrelevant
+  - contradictory
+  - missing
+
+generator_models:
+  - qwen3:8b
+  - gemma3:4b
+
+model_artifacts:
+  qwen3:8b:
+    ollama_id: 500a1f067a9f
+    weights_sha256: a3de86cd1c132c822487ededd47a324c50491393e6565cd14bafa40d0b8e686f
+    parameters: 8.2B
+    quantization: Q4_K_M
+    license: Apache-2.0
+  gemma3:4b:
+    ollama_id: 68ceab7e468a
+    weights_sha256: f06e91e18fc74295d0c781bf91622508c75655e2c18ed869d52447ffe1e667e1
+    projector_sha256: 7a50f9607a47389c028f2598c1f2d3e23b61913b4ce3c4a9eaaca62de1b9e098
+    parameters: 3.9B
+    quantization: Q4_K_M
+    license: Gemma-Terms-of-Use
+
+retrieval_methods:
+  - bm25
+retrieval_top_k: 5
+
+generation:
+  temperature: 0.0
+  max_tokens: 256
+  prompt_version: rag_campaign_concise_v2
+
+review_gate:
+  required: true
+  file: data/intermediate/campaign_10000_v2_review.jsonl
+  sha256: 649da8994e465bc66d655b73a3a77f1893a8937dab091d6fd1caf880b1431464
+  independent_reviewers: 2
+
+protocol_deviation:
+  approved_by: project_owner
+  date: 2026-10-13
+  description: >
+    Generation began before construction review and was halted at 175 records
+    after pilot inspection found duplicate retrieval passages and semantically
+    invalid contradiction substitutions. The checkpoint is audit-only and must
+    not be resumed or finalized. A fresh review-gated v3 pilot is required
+    before any campaign expansion.

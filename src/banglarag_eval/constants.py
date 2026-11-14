@@ -40,6 +40,16 @@ FAITHFULNESS_CATEGORIES = (
     "insufficient_evidence",
 )
 
+FACTUAL_CORRECTNESS_CATEGORIES = (
+    "correct",
+    "partially_correct",
+    "incorrect",
+    "not_answered",
+    "unjudgeable",
+)
+
+RESPONSE_BEHAVIORS = ("answered", "abstained", "mixed")
+
 HALLUCINATION_TYPES = (
     "none",
     "evident_conflict",

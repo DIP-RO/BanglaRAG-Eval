@@ -30,6 +30,9 @@ tqdm
 # JSON Schema draft 2020-12 support.
 jsonschema>=4.18
 
+# Deterministic Bengali-to-Latin NLC romanization for the Banglish condition.
+bangla-nlpkit>=0.1.1,<1
+
 # Test runner for the validation, sampling, and fixture test suite.
 pytest
 
@@ -39,3 +42,12 @@ flask>=3.0
 
 # NLP / RAG dependencies will be added after the evaluator
 # and benchmark pipeline are finalized.
+
+# Multilingual semantic/keyword/hybrid retrieval. The embeddings extra
+# prevents SemFuse from silently falling back to its hashing test provider.
+semfuse[embeddings]>=0.10,<1
+# Local bidirectional BanglaT5 translation used to freeze language variants.
+transformers>=4.40,<6
+torch>=2.2,<3
+sentencepiece>=0.2,<1
+protobuf>=5,<7

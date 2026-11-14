@@ -10,14 +10,13 @@ from __future__ import annotations
 
 import json
 import time
-import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from .sources import SourceDocument
 from .questions import generate_questions, QuestionSpec, CURATED_BANGLA_DOCUMENTS, ENGLISH_BASELINE_DOCUMENTS
-from .retriever import LexicalRetriever
+from .retriever import build_retriever
 from .evidence import build_evidence, EvidenceResult
 from .generator import generate as generate_answer, GenerationResult, check_ollama_available
 
@@ -37,6 +36,10 @@ def build_pilot_records(
     language_conditions: list[str] | None = None,
     use_ollama: bool = True,
     seed: int = 42,
+    retrieval_method: str = "bm25",
+    embedding_model: str = "bge-m3",
+    embedding_base_url: str | None = None,
+    retrieval_top_k: int = 3,
 ) -> list[dict[str, Any]]:
     """Build pilot records through the full pipeline.
 
@@ -50,6 +53,10 @@ def build_pilot_records(
         use_ollama: If True, generate answers with Ollama. If False, use
             intended_answer as a placeholder (for offline testing).
         seed: Random seed for reproducible corruption.
+        retrieval_method: One of ``bm25``, ``dense``, ``hybrid``, or ``semfuse``.
+        embedding_model: Ollama embedding model for dense and hybrid retrieval.
+        embedding_base_url: Optional Ollama API base URL for embeddings.
+        retrieval_top_k: Number of passages supplied to evidence construction.
 
     Returns:
         List of records in canonical schema format.
@@ -58,6 +65,8 @@ def build_pilot_records(
         evidence_conditions = ["correct", "partially_relevant", "irrelevant", "contradictory", "missing"]
     if language_conditions is None:
         language_conditions = ["native_bangla", "translated_bangla", "code_mixed", "banglish", "english"]
+    if retrieval_top_k < 1:
+        raise ValueError("retrieval_top_k must be at least 1")
 
     # 1. Load source documents
     bangla_docs = [
@@ -83,7 +92,11 @@ def build_pilot_records(
     all_docs = bangla_docs + english_docs
 
     # 2. Index documents for retrieval
-    retriever = LexicalRetriever()
+    retriever = build_retriever(
+        retrieval_method,
+        embedding_model=embedding_model,
+        base_url=embedding_base_url,
+    )
     retriever.index(all_docs)
 
     # 3. Generate questions
@@ -113,7 +126,7 @@ def build_pilot_records(
             continue
 
         # Retrieve evidence for the question
-        retrieval = retriever.retrieve(q_spec.question, top_k=3)
+        retrieval = retriever.retrieve(q_spec.question, top_k=retrieval_top_k)
 
         for evidence_condition in evidence_conditions:
             # Build evidence with controlled condition
@@ -185,7 +198,9 @@ def build_pilot_records(
                 "retrieved_context": evidence.retrieved_context,
                 "retrieval_documents": evidence.retrieval_documents,
                 "retrieval_configuration": retrieval.configuration,
-                "retriever": "lexical_bm25",
+                "retriever": retriever.name,
+                "embedding_model": retriever.embedding_model,
+                "reranker": retriever.reranker,
                 "generated_answer": generated_answer,
                 "answer_claims": [],
                 "generator_model": generation_model,
@@ -246,6 +261,10 @@ def run_pipeline(
     language_conditions: list[str] | None = None,
     use_ollama: bool = True,
     seed: int = 42,
+    retrieval_method: str = "bm25",
+    embedding_model: str = "bge-m3",
+    embedding_base_url: str | None = None,
+    retrieval_top_k: int = 3,
 ) -> dict[str, Any]:
     """Run the full pilot pipeline and save results.
 
@@ -255,6 +274,10 @@ def run_pipeline(
         language_conditions: Which language conditions to build.
         use_ollama: Whether to use Ollama for generation.
         seed: Random seed.
+        retrieval_method: One of ``bm25``, ``dense``, ``hybrid``, or ``semfuse``.
+        embedding_model: Ollama embedding model for dense and hybrid retrieval.
+        embedding_base_url: Optional Ollama API base URL for embeddings.
+        retrieval_top_k: Number of passages retrieved per question.
 
     Returns:
         Summary dict with counts and status.
@@ -266,6 +289,10 @@ def run_pipeline(
         language_conditions=language_conditions,
         use_ollama=use_ollama,
         seed=seed,
+        retrieval_method=retrieval_method,
+        embedding_model=embedding_model,
+        embedding_base_url=embedding_base_url,
+        retrieval_top_k=retrieval_top_k,
     )
 
     save_pilot_dataset(records, output_path)
@@ -275,12 +302,14 @@ def run_pipeline(
     lang_counts = Counter(r["language_condition"] for r in records)
     evidence_counts = Counter(r["evidence_condition"] for r in records)
     model_counts = Counter(r["generator_model"] for r in records)
+    retriever_counts = Counter(r["retriever"] for r in records)
 
     return {
         "total_records": len(records),
         "language_distribution": dict(lang_counts),
         "evidence_distribution": dict(evidence_counts),
         "generation_models": dict(model_counts),
+        "retriever_distribution": dict(retriever_counts),
         "output_path": str(output_path),
         "elapsed_seconds": round(time.time() - start_time, 2),
         "ollama_used": use_ollama and check_ollama_available(),

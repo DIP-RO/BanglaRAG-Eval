@@ -459,6 +459,7 @@ class TestGenerator:
         mock_resp.read.return_value = json.dumps({
             "response": "The capital of Bangladesh is Dhaka.",
             "eval_count": 10,
+            "done_reason": "stop",
         }).encode("utf-8")
         mock_resp.__enter__ = MagicMock(return_value=mock_resp)
         mock_resp.__exit__ = MagicMock(return_value=False)
@@ -472,6 +473,8 @@ class TestGenerator:
         assert isinstance(result, GenerationResult)
         assert "Dhaka" in result.answer
         assert result.eval_count == 10
+        assert result.finish_reason == "stop"
+        assert result.truncated is False
         assert result.latency_seconds >= 0
 
     @patch("banglarag_eval.pipeline.generator.urllib.request.urlopen")
