@@ -92,7 +92,7 @@ severity), chosen and justified case by case.
 
 The primary evaluation is **response-level** (the five-way faithfulness
 category). If the optional token-/span-level human annotation is collected
-(see [annotation_guidelines.md](annotation_guidelines.md)), an additional
+(see the annotation guidelines in the root README), an additional
 **token-level** analysis becomes possible:
 
 - For encoder-based detectors that emit per-token scores: token-level

@@ -70,7 +70,8 @@ This protects evidence-condition validity; raw source-hit status remains in
 
 ## Reproducibility
 
-Configuration is frozen in `configs/campaign_10000.yaml`. Question preparation
+Earlier campaign configurations were retired. The active configuration is
+`configs/campaign_10000_v3_unreviewed.yaml`. Question preparation
 and answer generation write append-only checkpoints and resume by stable IDs.
 Finalization refuses incomplete, duplicate, or schema-invalid data and emits a
 SHA-256 manifest plus a JSONL category index.
@@ -100,7 +101,7 @@ but it cannot truthfully close the following research criteria:
   output generation.
 # Methodology v2 campaign
 
-The replacement campaign is frozen in `configs/campaign_10000_v2.yaml`:
+The earlier replacement campaign is retained only in repository history:
 
 - 1,000 distinct BanglaQuAD QA IDs from 249 source articles
 - one balanced language assignment per QA (200 QAs per language)
@@ -125,7 +126,7 @@ ranks, and open-ended answers could receive semantically nonsensical
 contradiction values. The checkpoint is preserved as an audit artifact,
 including all incorrect model answers, and is not resumed.
 
-The corrective pilot is frozen in `configs/pilot_methodology_v3.yaml`. Its 50
+The corrective pilot configuration is retired. Its 50
 construction scenarios use 10 underlying QAs, five evidence conditions, one
 model, and BM25 over an exact-passage-deduplicated corpus. Open-ended and
 appearance contradictions require explicit curated candidates; the first
@@ -142,7 +143,7 @@ English question, final Bangla question, and explicit `bn->en->bn` path.
 dataset splitting must operate on that field. JSONL exports use strict
 serializer round-trip validation.
 
-The 50-row packet at `data/intermediate/pilot_methodology_v3_review.jsonl` is
+The earlier 50-row packet was an audit artifact and is no longer distributed.
 pending. Generation remains blocked until two independent reviewers approve
 every row.
 

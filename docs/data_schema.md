@@ -1,6 +1,6 @@
 # Data Schema
 
-Canonical machine-readable schema: [`configs/schema/record.schema.json`](../configs/schema/record.schema.json) (JSON Schema draft 2020-12).
+Canonical machine-readable schema: [`configs/record.schema.json`](../configs/record.schema.json) (JSON Schema draft 2020-12).
 Validation code: `src/banglarag_eval/schema.py`. Datasets are JSON Lines (one record per line, UTF-8, `ensure_ascii=False`).
 
 The schema is designed so that a record is **created once and enriched by later

@@ -47,7 +47,7 @@ evidence_conditions:
       evidence for the answer.
 
 # Human faithfulness taxonomy. Gold labels come exclusively from human
-# annotation and adjudication (see docs/annotation_guidelines.md).
+# annotation and adjudication (see the root README).
 faithfulness_categories:
   faithful:
     description: Every claim in the answer is supported by the retrieved evidence.

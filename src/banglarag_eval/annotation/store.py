@@ -27,7 +27,7 @@ from banglarag_eval.constants import (
 from banglarag_eval.dataset import save_dataset
 from banglarag_eval.schema import validate_record
 
-# Fields that annotators must NOT see (per docs/annotation_guidelines.md).
+# Fields that annotators must NOT see (per the README guidelines).
 _HIDDEN_FIELDS = frozenset({
     "source_text",
     "source_span",

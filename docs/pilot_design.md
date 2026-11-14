@@ -11,7 +11,7 @@ findings.
 ## Methodology-repair pilot (v3)
 
 The active repair pilot is configured in
-[`configs/pilot_methodology_v3.yaml`](../configs/pilot_methodology_v3.yaml).
+`configs/campaign_10000_v3_unreviewed.yaml`.
 It replaces the rejected pre-annotation campaign for the next experimental
 run; both older checkpoints remain audit artifacts.
 
@@ -34,7 +34,7 @@ run; both older checkpoints remain audit artifacts.
 - Topical relevance and question answerability are stored as separate fields.
 - Question meaning, answer leakage, and evidence construction are approved by
   two independent reviewers in
-  `data/intermediate/pilot_methodology_v3_review.jsonl` before generation.
+  review packet before generation.
 - Round-trip Bangla retains its original Bangla, intermediate English, final
   Bangla, and explicit translation path.
 - Generation records `finish_reason`, `truncated`, question/context/answer
@@ -48,7 +48,7 @@ Create the review packet with:
 
 ```bash
 python scripts/run_campaign.py review \
-  --config configs/pilot_methodology_v3.yaml \
+  --config configs/campaign_10000_v3_unreviewed.yaml \
   --questions data/intermediate/campaign_10000_v2_questions.jsonl \
   --overwrite-review-packet
 ```
@@ -117,7 +117,7 @@ datasets are not downloaded or redistributed.
 
 ## Annotation process
 
-Per [annotation_guidelines.md](annotation_guidelines.md): two independent
+Per the annotation guidelines in the root README: two independent
 annotators per example with required explanations. Gold labels come from
 unanimous agreement directly, or from adjudication (recorded as
 `third_rater` — independent of the annotators — or `joint_session`) when the
@@ -161,7 +161,7 @@ infrastructure behind the `RAGBackend` interface.
 | Gate | Threshold | On failure |
 |---|---|---|
 | Annotation agreement | Cohen's κ ≥ 0.60 on the 5-way labels (target ≥ 0.70), reported with a 95% bootstrap CI. Scaling additionally requires the CI lower bound ≥ 0.40; at Stage-1 n the CI is wide, so a passing point estimate with a lower bound below 0.40 extends the Stage-1 sample instead of scaling. | Revise guidelines/taxonomy, re-pilot on a fresh sub-batch. κ < 0.40 → redesign taxonomy before any scaling. |
-| Taxonomy adequacy | < 10% of examples carry a `NO-FIT:` marker in any annotator's explanation (the marker is defined in [annotation_guidelines.md](annotation_guidelines.md)) | Revise taxonomy; version bump. |
+| Taxonomy adequacy | < 10% of examples carry a `NO-FIT:` marker in any annotator's explanation (the marker is defined in the root README) | Revise taxonomy; version bump. |
 | Condition integrity | **All** Stage-1 examples re-labeled: a checker blind to the stored `evidence_condition` independently assigns a condition from the question/context/answer; ≥ 90% must match the stored label. (Checking 100% is feasible at n ≤ 50; the Stage-2 sampling rate will be pre-registered before Stage 2.) | Fix construction procedures; regenerate affected cells. |
 | Pipeline integrity | 100% of records pass validation; every stage's metadata complete | Fix tooling before scaling. |
 | Evaluator harness | Each configured evaluator produces standardized output on ≥ 95% of examples (failures logged, not silently dropped) | Fix adapters; re-run. |

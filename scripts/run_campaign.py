@@ -39,7 +39,7 @@ def main() -> None:
         ),
         help="Campaign phase; prepare/generate are append-only and resumable.",
     )
-    parser.add_argument("--config", default="configs/campaign_10000.yaml")
+    parser.add_argument("--config", default="configs/campaign_10000_v3_unreviewed.yaml")
     parser.add_argument("--source", default="data/raw/BanglaQuADv1.0-train.json")
     parser.add_argument(
         "--questions", default="data/intermediate/campaign_10000_questions_final_v2.jsonl"
@@ -52,7 +52,9 @@ def main() -> None:
     parser.add_argument("--review-packet")
     parser.add_argument("--overwrite-review-packet", action="store_true")
     parser.add_argument("--output", default="data/campaign_10000_final.jsonl")
-    parser.add_argument("--categories", default="data/campaign_10000_categories.jsonl")
+    parser.add_argument(
+        "--categories", default="data/campaign_10000_v3_unreviewed_categories.jsonl"
+    )
     parser.add_argument("--manifest", default="data/campaign_10000_manifest.json")
     parser.add_argument("--transform-model", default="qwen3:8b")
     parser.add_argument("--fallback-transform-model", default="gemma3:4b")
@@ -61,7 +63,7 @@ def main() -> None:
     )
     parser.add_argument("--bn-en-model", default="models/banglat5_nmt_bn_en")
     parser.add_argument("--en-bn-model", default="models/banglat5_nmt_en_bn")
-    parser.add_argument("--translation-overrides", default="configs/campaign_translation_overrides.yaml")
+    parser.add_argument("--translation-overrides", default=None)
     parser.add_argument("--repair-output")
     parser.add_argument(
         "--contradiction-proposals",

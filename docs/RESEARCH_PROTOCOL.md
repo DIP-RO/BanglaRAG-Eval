@@ -173,7 +173,7 @@ Inter-annotator agreement must be measured before scaling the benchmark.
 
 Human annotators apply a five-way response-level taxonomy (definitions,
 decision procedure, and boundary cases in
-[annotation_guidelines.md](annotation_guidelines.md)):
+the annotation guidelines in the root README):
 
 1. **Faithful** — every substantive claim supported by the retrieved evidence.
 2. **Partially Faithful** — some claims supported, at least one not.
@@ -411,7 +411,7 @@ earlier stages.
   connects behind a `RAGBackend` interface as retrieval/generation
   infrastructure only (see Section 8 for the gold-standard prohibition).
 
-Machine-readable schema: `configs/schema/record.schema.json`, documented in
+Machine-readable schema: `configs/record.schema.json`, documented in
 [data_schema.md](data_schema.md).
 
 ## 15. Known Limitations (current stage)
@@ -432,12 +432,12 @@ Machine-readable schema: `configs/schema/record.schema.json`, documented in
 
 | Element | Location |
 |---|---|
-| Machine-readable record schema | `configs/schema/record.schema.json` |
+| Machine-readable record schema | `configs/record.schema.json` |
 | Condition vocabularies | `configs/conditions.yaml` |
 | Stage-1 / Stage-2 pilot configs | `configs/pilot_stage1.yaml`, `configs/pilot_stage2.yaml` |
 | Validation & sampling code | `src/banglarag_eval/` |
 | Synthetic pipeline fixture | `data/fixtures/synthetic_fixture_v0.jsonl` |
 | Pilot design & gates | `docs/pilot_design.md` |
-| Annotation guidelines | `docs/annotation_guidelines.md` |
+| Annotation guidelines | `README.md#human-annotation-guidelines` |
 | Data schema documentation | `docs/data_schema.md` |
 | Evaluation & statistics protocol | `docs/evaluation_protocol.md` |

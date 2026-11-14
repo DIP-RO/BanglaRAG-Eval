@@ -11,7 +11,7 @@ from pathlib import Path
 # Repository root (src/banglarag_eval/constants.py -> repo root)
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONFIGS_DIR = REPO_ROOT / "configs"
-RECORD_SCHEMA_PATH = CONFIGS_DIR / "schema" / "record.schema.json"
+RECORD_SCHEMA_PATH = CONFIGS_DIR / "record.schema.json"
 CONDITIONS_CONFIG_PATH = CONFIGS_DIR / "conditions.yaml"
 
 SCHEMA_VERSION = "1.0.0"

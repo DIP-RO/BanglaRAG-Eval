@@ -13,6 +13,131 @@ We investigate whether existing RAG faithfulness evaluators that perform reasona
 
 The project focuses on evaluator reliability, not only model performance. Human annotations will serve as the independent reference standard.
 
+## Start here
+
+The repository has one active campaign dataset. The 209 MB JSONL is
+downloaded separately because GitHub rejects files larger than 100 MB:
+
+```bash
+cd "/Users/dipro/Bangla Rag/BanglaRAG-Eval"
+gh release download dataset-v3 \
+  --repo DIP-RO/BanglaRAG-Eval \
+  --pattern campaign_10000_v3_unreviewed.jsonl \
+  --dir data
+```
+
+Install the project and run all tests:
+
+```bash
+.venv/bin/pip install -e ".[dev,annotation,analysis,campaign]"
+PYTHONPATH=src .venv/bin/python -m pytest -q
+```
+
+Run the complete active campaign:
+
+```bash
+zsh scripts/run_campaign_10000_v3.sh
+```
+
+Create the human-annotation working copy and start the local UI:
+
+```bash
+.venv/bin/python scripts/setup_annotation.py \
+  --source data/campaign_10000_v3_unreviewed.jsonl \
+  --target data/human_annotation_v1.jsonl
+
+.venv/bin/python scripts/run_annotation_server.py \
+  --dataset data/human_annotation_v1.jsonl \
+  --mode both
+```
+
+Open `http://127.0.0.1:5000`. The canonical campaign file is never edited
+during annotation; `human_annotation_v1.jsonl` is local and ignored by Git.
+
+## Human annotation guidelines
+
+These are the complete operational instructions. Human labels are the
+independent reference standard; automatic evaluator output must never be shown
+to annotators or used to pre-fill labels.
+
+### What to judge
+
+Record three separate decisions:
+
+1. **Faithfulness:** whether the retrieved context supports the generated
+   answer. Repeating an error in corrupted context can still be faithful.
+2. **Reference correctness:** whether the answer agrees with the original
+   reference answer. A context-faithful answer can still be factually wrong.
+3. **Response behavior:** `answered`, `abstained`, or `mixed`.
+
+The annotator sees the question, retrieved context, generated answer,
+reference answer, three choices, and a required explanation. Do not use the
+source document, evidence-condition label, other annotations, or evaluator
+outputs.
+
+### Correctness labels
+
+- `correct`: agrees with the reference.
+- `partially_correct`: contains the reference answer but adds a material error
+  or omits a required part.
+- `incorrect`: conflicts with the reference.
+- `not_answered`: abstains or supplies no answer.
+- `unjudgeable`: the reference cannot support a decision.
+
+### Faithfulness labels
+
+- `faithful`: every substantive claim is supported by the retrieved evidence.
+- `partially_faithful`: central claims are at least partly supported, but a
+  substantive claim is unsupported or unverifiable.
+- `unsupported`: no central claim is supported, regardless of real-world truth.
+- `contradictory`: a central claim directly conflicts with the evidence.
+- `insufficient_evidence`: the evidence cannot be used to check any
+  substantive claim.
+
+Apply this procedure in order:
+
+1. Identify central and side claims; ignore hedges and formatting.
+2. If a central claim conflicts with the evidence, choose `contradictory`.
+   Abstention statements are meta-statements and are handled below.
+3. If the evidence cannot check any claim, choose `insufficient_evidence`.
+4. If no central claim is supported, choose `unsupported`.
+5. If every claim is supported, choose `faithful`; otherwise choose
+   `partially_faithful`.
+
+True-but-unsupported answers remain `unsupported`. An answer that repeats a
+wrong fact in the supplied evidence is faithful to that evidence. Numeral
+scripts, date scripts, honorifics, paraphrases, translations, and
+code-mixed/Banglish spelling differences do not by themselves change a label.
+For numeric claims, allow rounding only at the precision stated by the answer.
+
+An abstention is `faithful` when the evidence genuinely lacks the answer
+(`justified abstention`) and `unsupported` when the evidence contains the
+answer (`false refusal`); do not label either case contradictory. If no
+category fits, choose the closest category and begin the explanation with
+`NO-FIT:`. Optional hallucination types are `evident_conflict`,
+`subtle_conflict`, `evident_baseless_information`,
+`subtle_baseless_information`, or `other`. Optional answer-span marking may
+be recorded only if the annotation interface supports it.
+
+### Language and annotation process
+
+Native Bangla and translated Bangla use the same criteria. English tokens in
+code-mixed text are normal. Banglish spelling is not standardized; judge
+intended meaning. Mark an undecipherable evidence passage
+`insufficient_evidence`; an undecipherable answer with clear evidence is
+`unsupported`.
+
+Two independent annotators label every record without seeing each other's
+work. Each annotation contains an opaque annotator ID, faithfulness label,
+correctness label, response type, explanation, and timestamp. Agreement makes
+the unanimous labels the gold fields. Disagreement requires adjudication:
+prefer an independent `third_rater`; `joint_session` is also allowed when
+recorded. The adjudicator must not be one of the annotators for
+`third_rater`. Never create gold labels from automatic evaluators. Measure
+Cohen's kappa and raw agreement before scaling.
+
+Keep the mapping from opaque annotator IDs to people outside the repository.
+
 ## Research Questions
 
 **RQ1.** How well do existing RAG faithfulness evaluators agree with human judgments on native Bangla RAG?
@@ -34,7 +159,7 @@ each other's data.
 graph TB
     subgraph Configs["Configuration Layer"]
         CONDITIONS["configs/conditions.yaml<br/>Language + Evidence vocabularies"]
-        SCHEMA["configs/schema/record.schema.json<br/>Canonical record schema"]
+        SCHEMA["configs/record.schema.json<br/>Canonical record schema"]
         PILOT1["configs/pilot_stage1.yaml<br/>Stage 1: 40 examples"]
         PILOT2["configs/pilot_stage2.yaml<br/>Stage 2: 400 examples"]
     end
@@ -460,7 +585,7 @@ flowchart TB
 
 ## Human Annotation Flow
 
-The annotation web UI enforces the protocol from `docs/annotation_guidelines.md`:
+The annotation web UI enforces the protocol in the root README:
 annotators see only the question, retrieved evidence, and generated answer —
 never the source document, intended answer, evidence condition, other
 annotators' labels, or evaluator outputs.
@@ -543,7 +668,7 @@ flowchart TB
 
 ## Faithfulness Taxonomy — Decision Procedure
 
-Annotators apply this ordered procedure (from `docs/annotation_guidelines.md`).
+Annotators apply this ordered procedure from the root README.
 The procedure is authoritative; the table is a summary.
 
 ```mermaid
@@ -715,7 +840,7 @@ passage-count-controlled evidence variants, and a mandatory two-reviewer gate.
 
 ```bash
 .venv/bin/python scripts/run_campaign.py review \
-  --config configs/pilot_methodology_v3.yaml \
+  --config configs/campaign_10000_v3_unreviewed.yaml \
   --questions data/intermediate/campaign_10000_v2_questions.jsonl \
   --overwrite-review-packet
 ```
@@ -747,7 +872,7 @@ BanglaQuAD Wikipedia articles, five language conditions, five controlled
 evidence conditions, and paired Qwen3/Gemma 3 outputs. BM25 and SemFuse are
 assigned evenly across scenarios. English and round-trip Bangla use pinned
 bidirectional BanglaT5 checkpoints; all 200 pairs were reviewed and 83 explicit
-corrections are versioned in `configs/campaign_translation_overrides.yaml`.
+corrections are versioned in the generated campaign provenance.
 Code-mixing uses a frozen lexical rule and Banglish uses deterministic
 `bangla-nlpkit` NLC romanization.
 
@@ -759,7 +884,7 @@ Code-mixing uses a frozen lexical rule and Banglish uses deterministic
 
 It must not be finalized under the rejected methodology. Its intended output
 was `data/campaign_10000_final.jsonl`; category membership
-and counts are in `data/campaign_10000_categories.jsonl`, with full provenance
+and counts are generated alongside the active campaign output, with full provenance
 and checksums in `data/campaign_10000_manifest.json`. Human-only fields remain
 empty. See [campaign_10000.md](docs/campaign_10000.md) for the design and the
 explicit Stage-1 protocol deviation.
@@ -824,7 +949,7 @@ Then open `http://127.0.0.1:5000` in your browser.
 Set `BANGLARAG_ANNOTATION_SECRET` in your environment for stable
 sessions across server restarts.
 
-See [docs/annotation_guidelines.md](docs/annotation_guidelines.md) for
+See the [Human annotation guidelines](#human-annotation-guidelines) above for
 the full annotation protocol, taxonomy, and decision procedure.
 
 ---
@@ -839,11 +964,11 @@ All documentation is organized in [`docs/`](docs/README.md) — see the [documen
 - [evaluation_protocol.md](docs/evaluation_protocol.md) — evaluator framework, metrics, statistics, circularity controls
 
 ### For annotators
-- [annotation_guidelines.md](docs/annotation_guidelines.md) — 5-way taxonomy, decision procedure, worked examples, language-specific notes
+- The [Human annotation guidelines](#human-annotation-guidelines) — 5-way taxonomy, decision procedure, worked examples, language-specific notes
 
 ### For developers
 - [data_schema.md](docs/data_schema.md) — canonical record schema, field definitions, validation rules R1–R10
-- [configs/schema/record.schema.json](configs/schema/record.schema.json) — JSON Schema draft 2020-12
+- [configs/record.schema.json](configs/record.schema.json) — JSON Schema draft 2020-12
 - [configs/conditions.yaml](configs/conditions.yaml) — language + evidence condition vocabularies
 
 ---
@@ -873,7 +998,7 @@ BanglaRAG-Eval/
 │   ├── RESEARCH_PROTOCOL.md
 │   ├── pilot_design.md
 │   ├── data_schema.md
-│   ├── annotation_guidelines.md
+│   ├── record.schema.json
 │   └── evaluation_protocol.md
 ├── experiments/        # experiment definitions (Milestone 2+)
 ├── scripts/            # fixture builder, annotation, pipeline, evaluator runners

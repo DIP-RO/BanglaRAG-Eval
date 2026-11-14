@@ -1,7 +1,7 @@
 """Record validation: JSON Schema structure plus cross-field rules.
 
 Structural validation delegates to the canonical machine-readable schema
-in configs/schema/record.schema.json. Cross-field rules encode
+in configs/record.schema.json. Cross-field rules encode
 methodological invariants that JSON Schema cannot express cleanly:
 
   R1  native_bangla records must not have translation provenance.
